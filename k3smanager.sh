@@ -335,16 +335,20 @@ else
 fi
 
 while true; do
-    
+
     if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
         PROMPT="k3s [${#SELECCIONADOS_PODS[@]} pods sel]> "
     else
         PROMPT="k3s> "
     fi
 
-    # Permite escribir todo junto (ejemplo: 'add pod 1 2' o 'test-connections 1 3')
-    read -e -p "$PROMPT" ENTRADA_RAW
-
+    # En Bash se usa 'read -e'. En Zsh 'vared' o 'read' con el módulo zle.
+    if [ -n "$ZSH_VERSION" ]; then
+        read -r "ENTRADA_RAW?$PROMPT"
+    else
+        read -e -p "$PROMPT" ENTRADA_RAW
+    fi
+    
     # Si se presiona Enter sin escribir nada, continua
     if [ -z "$ENTRADA_RAW" ]; then
         continue
