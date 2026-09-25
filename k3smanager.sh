@@ -324,7 +324,7 @@ while true; do
     if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
         PROMPT="k3s [${#SELECCIONADOS_PODS[@]} pods sel]> "
     else
-        PROMPT="prueba> "
+        PROMPT="k3s> "
     fi
 
     # Permite escribir todo junto (ejemplo: 'add pod 1 2' o 'test-connections 1 3')
