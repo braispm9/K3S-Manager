@@ -363,7 +363,7 @@ while true; do
     COMANDO="${INPUT[0]}"
     ARGUMENTOS=("${INPUT[@]:1}")
 
-    case $ACCION in
+    case "$COMANDO" in
         list)
             FLAG="-A"
             if [ -n "$SUBACCION" ] && [ "$SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ]; then
