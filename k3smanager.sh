@@ -1,5 +1,8 @@
 #!/bin/bash
 
+Funcion_Principal() {
+UPDATEPENDING=0
+
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -485,13 +488,8 @@ while true; do
             ;;
 
         update)
-            if actualizar_k3smanager; then
-                echo -e "\nRecargando K3s Manager..."
-                sleep 1
-                PROMPT="k3s> "
-                source "$RUTA_DESTINO" 2>/dev/null || source "$RUTA_ABSOLUTA" 2>/dev/null
-                break
-            fi
+            UPDATEPENDING=1
+            break
             ;;
             
         create)
@@ -517,3 +515,9 @@ while true; do
             ;;
     esac
 done
+}
+
+if [[ $UPDATEPENDING == 1]]; then
+    actualizar_k3smanager
+    Funcion_principal
+fi
