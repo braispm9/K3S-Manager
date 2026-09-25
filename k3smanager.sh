@@ -504,7 +504,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.4"
+            echo "Esta es la versión 1.3.2"
             comprobar_actualizacion
             ;;
         
