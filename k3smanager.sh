@@ -77,36 +77,38 @@ actualizar_k3smanager() {
     REPO_NAME="K3S-Manager"
     BRANCH="main"
     SCRIPT_NAME="k3smanager.sh"
-    RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+    
+    # Añadimos un parámetro de tiempo (?t=...) para saltarnos la caché de GitHub/curl
+    RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}?t=$(date +%s)"
 
-    # Obtener la ruta absoluta del script actual
-    SCRIPT_ACTUAL="${BASH_SOURCE[0]:-${(%):-%x}}"
+    # Obtener ruta absoluta del script actual
+    if [ -n "$ZSH_VERSION" ]; then
+        SCRIPT_ACTUAL="${(%):-%x}"
+    else
+        SCRIPT_ACTUAL="${BASH_SOURCE[0]}"
+    fi
+    
     RUTA_ABSOLUTA="$(readlink -f "$SCRIPT_ACTUAL" 2>/dev/null || realpath "$SCRIPT_ACTUAL" 2>/dev/null || echo "$SCRIPT_ACTUAL")"
 
     TEMP_FILE=$(mktemp)
     
-    if curl -fsSL -o "$TEMP_FILE" "$RAW_URL"; then
+    # -H "Cache-Control: no-cache" fuerza a descargar la versión más reciente
+    if curl -fsSL -H "Cache-Control: no-cache" -o "$TEMP_FILE" "$RAW_URL"; then
         if [ -s "$TEMP_FILE" ]; then
-            # Reemplazar el archivo local por el nuevo
             mv "$TEMP_FILE" "$RUTA_ABSOLUTA"
             chmod +x "$RUTA_ABSOLUTA"
-            echo "   [OK] Actualización descargada con éxito."
+            echo "   [OK] Nueva versión descargada correctamente en: $RUTA_ABSOLUTA"
             echo "=========================================="
-            echo " Reiniciando K3s Manager..."
-            echo "=========================================="
-            sleep 1
-
-            # Recargar el script en la misma shell sin cerrar la terminal
-            REINICIANDO_K3SMANAGER=true
-            source "$RUTA_ABSOLUTA"
             return 0
         else
             echo "   [X] Error: El archivo descargado está vacío."
             rm -f "$TEMP_FILE"
+            return 1
         fi
     else
-        echo "   [X] Error al descargar la actualización desde GitHub."
+        echo "   [X] Error al descargar desde GitHub."
         rm -f "$TEMP_FILE"
+        return 1
     fi
 }
 
