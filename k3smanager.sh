@@ -316,6 +316,11 @@ actualizar_pods "-A"
 bind 'TAB: complete' 2>/dev/null
 
 while true; do
+    
+    if [ "$REINICIANDO_K3SMANAGER" = true ]; then
+        unset REINICIANDO_K3SMANAGER
+    fi
+    
     if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
         PROMPT="k3s [${#SELECCIONADOS_PODS[@]} pods sel]> "
     else
