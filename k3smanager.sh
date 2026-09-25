@@ -485,14 +485,17 @@ while true; do
 
         update)
             if actualizar_k3smanager; then
-                echo -e "\n  [OK] Reemplazando sesión con la nueva versión..."
+                echo -e "\nRecargando K3s Manager..."
                 sleep 1
                 
-                # Restaurar explícitamente el prompt
-                export PROMPT="k3s> "
+                # Definir de nuevo la variable explícitamente
+                PROMPT="k3s> "
                 
-                # Reejecutar la shell limpiamente cargando el archivo actualizado
-                exec "$SHELL" -c "source '$RUTA_DESTINO' 2>/dev/null || source '$RUTA_ABSOLUTA'"
+                # Volver a cargar el código descargado en la sesión activa
+                source "$RUTA_DESTINO" 2>/dev/null || source "$RUTA_ABSOLUTA"
+                
+                # Salir de este bucle viejo para que tome el control el recién cargado
+                break
             fi
             ;;
             
