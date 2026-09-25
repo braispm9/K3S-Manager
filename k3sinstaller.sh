@@ -59,7 +59,7 @@ done
 echo -e "\n2. Descargando el script desde GitHub..."
 curl -L \
   -H "Accept: application/vnd.github.object" \
-  -H "Authorization: Bearer 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" \
+  -H "Authorization: Bearer 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" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
   -o "$DESTINO" \
   https://api.github.com/repos/braispm9/K3S-Manager/contents/main/k3smanager.sh
