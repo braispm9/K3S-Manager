@@ -31,7 +31,7 @@ echo "Instalando para el usuario: $REAL_USER ($REAL_HOME)"
 # 2. Comprobar e instalar dependencias básicas del sistema
 echo -e "\n1. Verificando dependencias del sistema..."
 
-DEPENDENCIAS=("curl" "kubectl")
+DEPENDENCIAS=("curl" "kubectl" "fzf")
 
 for dep in "${DEPENDENCIAS[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
