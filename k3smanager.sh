@@ -1,5 +1,5 @@
 #!/bin/bash
-
+Version="Release 1.5"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -530,7 +530,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.4.1"
+            echo "Esta es la versión: $VERSION"
             comprobar_actualizacion
             ;;
         
