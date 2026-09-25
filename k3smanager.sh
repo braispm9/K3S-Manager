@@ -73,29 +73,38 @@ comprobar_actualizacion() {
     GITHUB_USER="braispm9"
     REPO_NAME="K3S-Manager"
     BRANCH="main"
+    SCRIPT_NAME="k3smanager.sh"
 
-    echo "Verificando versión con GitHub..."
+    echo "Verificando actualizaciones con GitHub..."
 
-    # Obtener el hash del último commit de la rama main en GitHub
-    REMOTE_HASH=$(curl -s "https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/commits/${BRANCH}" | grep -m1 '"sha":' | cut -d'"' -f4)
-
-    if [ -z "$REMOTE_HASH" ]; then
-        echo "  [X] No se pudo conectar con GitHub para comprobar la versión."
-        return 1
+    # Detectar la ruta del script local
+    if [ -n "$ZSH_VERSION" ]; then
+        SCRIPT_ACTUAL="${(%):-%x}"
+    else
+        SCRIPT_ACTUAL="${BASH_SOURCE[0]:-$0}"
     fi
+    RUTA_LOCAL="$(readlink -f "$SCRIPT_ACTUAL" 2>/dev/null || realpath "$SCRIPT_ACTUAL" 2>/dev/null || echo "$SCRIPT_ACTUAL")"
 
-    # Si tu carpeta local es un repositorio Git, compara directamente
-    if command -v git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null; then
-        LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
-        if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
-            echo "  [OK] Estás utilizando la última versión."
+    # Descargar la versión remota a un archivo temporal
+    TEMP_REMOTE=$(mktemp)
+    RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}?t=$(date +%s)"
+
+    if curl -fsSL -H "Cache-Control: no-cache" -o "$TEMP_REMOTE" "$RAW_URL"; then
+        # Obtener el hash de ambos archivos
+        HASH_LOCAL=$(sha256sum "$RUTA_LOCAL" 2>/dev/null | awk '{print $1}' || md5sum "$RUTA_LOCAL" 2>/dev/null | awk '{print $1}')
+        HASH_REMOTO=$(sha256sum "$TEMP_REMOTE" 2>/dev/null | awk '{print $1}' || md5sum "$TEMP_REMOTE" 2>/dev/null | awk '{print $1}')
+
+        rm -f "$TEMP_REMOTE"
+
+        if [ -n "$HASH_LOCAL" ] && [ "$HASH_LOCAL" = "$HASH_REMOTO" ]; then
+            echo "  [OK] Estás utilizando la última versión disponible."
         else
-            echo "  [!] Hay una nueva versión disponible. Ejecuta 'update' para actualizar."
+            echo "  [!] Hay una nueva versión disponible en GitHub."
+            echo "      Ejecuta 'update' para actualizar el script."
         fi
     else
-        # Si no usas Git localmente, descargamos el header ETag (MD5/SHA del archivo raw)
-        REMOTE_ETAG=$(curl -sI "https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3smanager.sh?t=$(date +%s)" | grep -i "etag" | tr -d '\r')
-        echo "  [i] Conexión correcta con GitHub. Si notas cambios pendientes en el repositorio, ejecuta 'update'."
+        rm -f "$TEMP_REMOTE"
+        echo "  [X] No se pudo conectar con GitHub para verificar la versión."
     fi
 }
 
