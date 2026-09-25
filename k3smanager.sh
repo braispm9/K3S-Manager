@@ -1,8 +1,5 @@
 #!/bin/bash
 
-Funcion_Principal() {
-UPDATEPENDING=0
-
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -488,8 +485,16 @@ while true; do
             ;;
 
         update)
-            UPDATEPENDING=1
-            break
+            if actualizar_k3smanager; then
+                echo -e "\n  [OK] Reemplazando sesión con la nueva versión..."
+                sleep 1
+                
+                # Restaurar explícitamente el prompt
+                export PROMPT="k3s> "
+                
+                # Reejecutar la shell limpiamente cargando el archivo actualizado
+                exec "$SHELL" -c "source '$RUTA_DESTINO' 2>/dev/null || source '$RUTA_ABSOLUTA'"
+            fi
             ;;
             
         create)
@@ -516,8 +521,3 @@ while true; do
     esac
 done
 }
-
-if [[ $UPDATEPENDING == 1]]; then
-    actualizar_k3smanager
-    Funcion_principal
-fi
