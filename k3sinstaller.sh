@@ -60,7 +60,10 @@ done
 
 # 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
-wget --header="Authorization: token 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" \ https:raw.githubusercontent.com/braispm9/K3S-Manager/main/k3smanager.sh
+curl -s -H "Authorization: token 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" \
+    -H "Accept: application/vnd.github.v3.raw" \
+    -o "$DESTINO" \
+    "https://api.github.com/repos/braispm9/K3S-Manager/contents/k3smanager.sh"
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
     echo "   [OK] Script descargado correctamente en: $DESTINO"
