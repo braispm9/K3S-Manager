@@ -1,0 +1,405 @@
+#!/bin/bash
+
+#!/bin/bash
+
+# --- VARIABLES GLOBALES ---
+SELECCIONADOS_PODS=()
+SELECCIONADOS_NAMESPACES=()
+PODS_LIST=()
+PODS_NS_LIST=()
+
+# --- FUNCIONES DE AYUDA Y CONSOLA INTERACTIVA ---
+
+mostrar_ayuda() {
+    local cmd="$1"
+
+    if [ -z "$cmd" ]; then
+        echo -e "\nComandos disponibles para Pods:"
+        echo "  pods [namespace|-A]        - Listar pods con su ID numérico (-A para todos)"
+        echo "  add pod <IDs...>           - Añadir pod(s) a la selección activa (ej: add pod 1 2)"
+        echo "  remove pod <IDs...>        - Quitar pod(s) de la selección activa (ej: remove pod 1)"
+        echo "  clear-sel                  - Limpiar toda la selección de pods actual"
+        echo "  clear                      - Limpiar la pantalla de la terminal"
+        echo "  show                       - Mostrar pods seleccionados actualmente"
+        echo ""
+        echo "Comandos de información y acción:"
+        echo "  describe [-l]              - Ver información resumida o completa (-l) de la selección"
+        echo "  logs                       - Mostrar logs (requiere seleccionar solo 1 pod)"
+        echo "  delete                     - Eliminar el/los pod(s) seleccionados"
+        echo ""
+        echo "Pruebas de Red y Diagnóstico:"
+        echo "  test-network [rango|-a]    - Probar conectividad global (-a o --all para todas)"
+        echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods"
+        echo ""
+        echo "  help [comando]             - Ayuda general o de una función específica"
+        echo -e "  exit | quit                - Salir de la consola\n"
+        return
+    fi
+
+    case $cmd in
+        pods|list)
+            echo -e "\nUSO: pods [namespace|-A]"
+            echo "Muestra todos los pods disponibles asignándoles un ID numérico."
+            echo ""
+            ;;
+        describe)
+            echo -e "\nUSO: describe [-l]"
+            echo "Muestra la información de los pods seleccionados."
+            echo "  describe     -> Vista resumida (Estado, IP, Nodo, Restarts, Eventos)."
+            echo "  describe -l  -> Vista completa detallada (kubectl describe)."
+            echo ""
+            ;;
+        test-network)
+            echo -e "\nUSO: test-network [número | -a | --all]"
+            echo "Prueba la conexión desde un pod de prueba hacia las máquinas nginx-prueba."
+            echo "Ejemplos:"
+            echo "  test-network 20     -> Prueba de la máquina 1 a la 20."
+            echo "  test-network -a     -> Prueba con TODAS las máquinas detectadas."
+            echo "  test-network --all  -> Prueba con TODAS las máquinas detectadas."
+            echo ""
+            ;;
+        test-connections)
+            echo -e "\nUSO: test-connections [ID_ORIGEN] [ID_DESTINO]"
+            echo "Realiza una petición HTTP (curl) directa entre dos pods especificados por su ID."
+            echo "Ejemplo:"
+            echo "  test-connections 1 2"
+            echo ""
+            ;;
+        clear)
+            echo -e "\nUSO: clear"
+            echo "Limpia la pantalla de la terminal."
+            echo ""
+            ;;
+        *)
+            echo -e "\nNo hay información detallada sobre '$cmd'. Escribe 'help' para ver la lista.\n"
+            ;;
+    esac
+}
+
+actualizar_pods() {
+    local ns_flag="${1:---all-namespaces}"
+    PODS_LIST=()
+    PODS_NS_LIST=()
+
+    while read -r ns name; do
+        if [ -n "$name" ]; then
+            PODS_NS_LIST+=("$ns")
+            PODS_LIST+=("$name")
+        fi
+    done < <(kubectl get pods $ns_flag --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null)
+}
+
+obtener_pods_por_indice() {
+    local ids=("$@")
+    PODS_TEMPORALES=()
+    NS_TEMPORALES=()
+
+    for id in "${ids[@]}"; do
+        if [[ "id"=~[0-9]+ ]] && [ "id"-ge1]&&["id" -le "${#PODS_LIST[@]}" ]; then
+            idx=$((id - 1))
+            PODS_TEMPORALES+=("${PODS_LIST[$idx]}")
+            NS_TEMPORALES+=("${PODS_NS_LIST[$idx]}")
+        else
+            echo "Error: El ID '$id' no es válido. Ejecuta 'pods' primero."
+            return 1
+        fi
+    done
+}
+
+añadir_a_seleccion() {
+    if obtener_pods_por_indice "$@"; then
+        for i in "${!PODS_TEMPORALES[@]}"; do
+            local pod="${PODS_TEMPORALES[$i]}"
+            local ns="${NS_TEMPORALES[$i]}"
+            local existe=0
+
+            for j in "${!SELECCIONADOS_PODS[@]}"; do
+                if [ "${SELECCIONADOS_PODS[$j]}" == "pod"]&&["{SELECCIONADOS_NAMESPACES[$j]}" == "$ns" ]; then
+                    existe=1
+                    break
+                fi
+            done
+
+            if [ $existe -eq 0 ]; then
+                SELECCIONADOS_PODS+=("$pod")
+                SELECCIONADOS_NAMESPACES+=("$ns")
+                echo "Pod '$pod' (namespace: $ns) añadido a la selección."
+            else
+                echo "El pod '$pod' ya estaba seleccionado."
+            fi
+        done
+    fi
+}
+
+quitar_de_seleccion() {
+    if obtener_pods_por_indice "$@"; then
+        for i in "${!PODS_TEMPORALES[@]}"; do
+            local pod_quitar="${PODS_TEMPORALES[$i]}"
+            local ns_quitar="${NS_TEMPORALES[$i]}"
+            NUEVA_PODS=()
+            NUEVA_NS=()
+
+            for j in "${!SELECCIONADOS_PODS[@]}"; do
+                if [ "${SELECCIONADOS_PODS[$j]}" != "podquitar"]||["{SELECCIONADOS_NAMESPACES[$j]}" != "$ns_quitar" ]; then
+                    NUEVA_PODS+=("${SELECCIONADOS_PODS[$j]}")
+                    NUEVA_NS+=("${SELECCIONADOS_NAMESPACES[$j]}")
+                fi
+            done
+
+            SELECCIONADOS_PODS=("${NUEVA_PODS[@]}")
+            SELECCIONADOS_NAMESPACES=("${NUEVA_NS[@]}")
+            echo "Pod '$pod_quitar' removido de la selección."
+        done
+    fi
+}
+
+# --- FUNCIONES DE EVALUACIÓN Y CONEXIONES DE RED ---
+
+probar_red_cluster() {
+    local arg="$1"
+    local total_maquinas=0
+
+    # Determinar si es -a / --all o un entero explícito
+    if [ "arg"=="-a"]||["arg" == "--all" ] || [ -z "$arg" ]; then
+        total_maquinas=$(kubectl get pods --all-namespaces --no-headers | grep -c "nginx-prueba" 2>/dev/null)
+        if [ "$total_maquinas" -eq 0 ]; then
+            total_maquinas=50
+        fi
+    elif [[ "arg"=~[0-9]+ ]]; then
+        total_maquinas=$arg
+    else
+        echo "Opción no reconocida para test-network. Usa un número, -a o --all."
+        return 1
+    fi
+
+    echo "Lanzando contenedor de pruebas..."
+    kubectl run probador-red --image=curlimages/curl --restart=Never -- sleep 3600 >/dev/null 2>&1
+    kubectl wait --for=condition=Ready pod/probador-red --timeout=10s >/dev/null 2>&1
+
+    echo -e "\nProbando comunicación con las $total_maquinas máquinas...\n"
+    ERRORES=0
+    rm -f conexion.log >/dev/null 2>&1
+
+    for ((i=1; i<=total_maquinas; i++)); do
+        STATUS=(kubectlexecprobador-red--curl-s-o/dev/null-w"%httpcode""http://nginx-prueba-i" 2>/dev/null)
+
+        if [[ ! "STATUS"=~[0-9]+ ]] || [ "$STATUS" -ne 200 ]; then
+            echo "[X] Máquina $i Error de conexión (HTTP ${STATUS:-SIN RESPUESTA})" >> conexion.log
+            ERRORES=$((ERRORES + 1))
+        fi
+    done
+
+    if [ $ERRORES -gt 0 ]; then
+        echo -e "[X] Se encontraron $ERRORES errores de conexión."
+        echo "Verifica el archivo conexion.log para detalles."
+    else
+        echo -e "[OK] ¡Comunicaciones exitosas con las $total_maquinas máquinas!\n"
+
+        read -p "¿Deseas cargar automáticamente estos pods en la selección? (s/n): " opcion
+        if [[ "opcion"=~[sS] ]]; then
+            actualizar_pods "-A"
+            for idx in "${!PODS_LIST[@]}"; do
+                if [[ "${PODS_LIST[$idx]}" =~ nginx-prueba- ]]; then
+                    añadir_a_seleccion "$((idx + 1))" >/dev/null
+                fi
+            done
+            echo "Pods importados a la selección activa."
+        fi
+    fi
+
+    kubectl delete pod probador-red --grace-period=0 --force >/dev/null 2>&1
+}
+
+probar_conexion_entre_pods() {
+    local id_orig="$1"
+    local id_dest="$2"
+
+    if [ -z "idorig"]||[-z"id_dest" ]; then
+        echo "Error: Debes especificar el ID de origen y destino. Ejemplo: test-connections 1 2"
+        return 1
+    fi
+
+    if obtener_pods_por_indice "idorig""id_dest"; then
+        local pod_origen="${PODS_TEMPORALES[0]}"
+        local ns_origen="${NS_TEMPORALES[0]}"
+        local pod_destino="${PODS_TEMPORALES[1]}"
+
+        echo -e "\nProbando petición desde 'podorigen'(ns_origen) hacia '$pod_destino'..."
+
+        RESPUESTA=(kubectlexec-n"ns_origen" "podorigen"--curl-s-m5"http://pod_destino" 2>&1)
+        EXIT_CODE=$?
+
+        if [ $EXIT_CODE -eq 0 ]; then
+            echo -e "[OK] Respuesta recibida del pod destino:\n"
+            echo "$RESPUESTA" | head -n 10
+        else
+            echo -e "[X] Error al realizar la petición desde '$pod_origen':"
+            echo "$RESPUESTA"
+        fi
+    fi
+}
+
+# --- BUCLE PRINCIPAL (TERMINAL INTERACTIVA) ---
+
+echo "=================================================="
+echo " Consola Interactiva K3s (Gestión de Pods)"
+echo " Escribe 'help' o 'help <comando>' para asistencia."
+echo "=================================================="
+
+actualizar_pods "-A"
+
+while true; do
+    if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
+        PROMPT="k3s [${#SELECCIONADOS_PODS[@]} pods sel]> "
+    else
+        PROMPT="k3s> "
+    fi
+
+    read -p "$PROMPT" -a INPUT
+
+    if [ ${#INPUT[@]} -eq 0 ]; then
+        continue
+    fi
+
+    ACCION=${INPUT[0]}
+    SUBACCION=${INPUT[1]}
+    ARGUMENTOS=("${INPUT[@]:1}")
+
+    case $ACCION in
+        pods|list)
+            FLAG="-A"
+            if [ -n "SUBACCION"]&&["SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ]; then
+                FLAG="-n $SUBACCION"
+            fi
+            actualizar_pods "$FLAG"
+
+            if [ ${#PODS_LIST[@]} -eq 0 ]; then
+                echo "No se encontraron pods."
+            else
+                echo -e "\nID   NAMESPACE         NOMBRE DEL POD"
+                echo "--------------------------------------------------"
+                for i in "${!PODS_LIST[@]}"; do
+                    printf "%-4d %-17s %s\n" ((i+1))"{PODS_NS_LIST[$i]}" "${PODS_LIST[$i]}"
+                done
+                echo ""
+            fi
+            ;;
+
+        add|select)
+            if [ "SUBACCION"=="pod"]||["SUBACCION" == "pods" ]; then
+                PARAMS=("${INPUT[@]:2}")
+            else
+                PARAMS=("${ARGUMENTOS[@]}")
+            fi
+
+            if [ ${#PARAMS[@]} -eq 0 ]; then
+                echo "Error: Indica los ID numéricos de los pods."
+            else
+                añadir_a_seleccion "${PARAMS[@]}"
+            fi
+            ;;
+
+        remove|deselect)
+            if [ "SUBACCION"=="pod"]||["SUBACCION" == "pods" ]; then
+                PARAMS=("${INPUT[@]:2}")
+            else
+                PARAMS=("${ARGUMENTOS[@]}")
+            fi
+
+            if [ ${#PARAMS[@]} -eq 0 ]; then
+                echo "Error: Indica los ID numéricos de los pods."
+            else
+                quitar_de_seleccion "${PARAMS[@]}"
+            fi
+            ;;
+
+        show)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "No hay ningún pod seleccionado."
+            else
+                echo -e "\nPods seleccionados actualmente:"
+                for i in "${!SELECCIONADOS_PODS[@]}"; do
+                    echo " - ${SELECCIONADOS_PODS[$i]} (namespace: ${SELECCIONADOS_NAMESPACES[$i]})"
+                done
+                echo ""
+            fi
+            ;;
+
+        clear-sel)
+            SELECCIONADOS_PODS=()
+            SELECCIONADOS_NAMESPACES=()
+            echo "Selección limpiada."
+            ;;
+
+        clear)
+            clear
+            ;;
+
+        describe)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados."
+            else
+                for i in "${!SELECCIONADOS_PODS[@]}"; do
+                    pod_actual="${SELECCIONADOS_PODS[$i]}"
+                    ns_actual="${SELECCIONADOS_NAMESPACES[$i]}"
+
+                    if [ "$SUBACCION" == "-l" ]; then
+                        echo -e "\n=== INFORMACIÓN COMPLETA: $pod_actual (NS: $ns_actual) ==="
+                        kubectl describe pod "podactual"-n"ns_actual"
+                    else
+                        echo -e "\n=== RESUMEN DE POD: $pod_actual ==="
+                        echo "Namespace: $ns_actual"
+                        kubectl get pod "podactual"-n"ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount" --no-headers 2>/dev/null | awk '{print "Estado: "$1"\nIP: "$2"\nNodo: "$3"\nReinicios: "$4}'
+                        echo -e "\nEventos Recientes:"
+                        kubectl get events -n "nsactual"--field-selectorinvolvedObject.name="pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
+                        echo "--------------------------------------------------"
+                    fi
+                done
+            fi
+            ;;
+
+        logs)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados."
+            elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
+                echo "Error: Selecciona solo 1 pod para ver sus logs."
+            else
+                kubectl logs "SELECCIONADOSPODS[0]"-n"{SELECCIONADOS_NAMESPACES[0]}"
+            fi
+            ;;
+
+        delete)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados."
+            else
+                for i in "${!SELECCIONADOS_PODS[@]}"; do
+                    echo "Eliminando pod '${SELECCIONADOS_PODS[$i]}'..."
+                    kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}" --grace-period=0 --force
+                done
+                SELECCIONADOS_PODS=()
+                SELECCIONADOS_NAMESPACES=()
+            fi
+            ;;
+
+        test-network)
+            probar_red_cluster "$SUBACCION"
+            ;;
+
+        test-connections)
+            probar_conexion_entre_pods "SUBACCION""{INPUT[2]}"
+            ;;
+
+        help)
+            mostrar_ayuda "$SUBACCION"
+            ;;
+
+        exit|quit)
+            echo "Saliendo de la consola K3s..."
+            break
+            ;;
+
+        *)
+            echo "Comando no reconocido: '$ACCION'. Escribe 'help' para ayuda."
+            ;;
+    esac
+done
