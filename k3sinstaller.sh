@@ -14,7 +14,7 @@ DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
 DESTINO="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
 
 echo "=================================================="
-echo " Instalador Automático de la Consola K3s"
+echo " Instalador Automático de K3s Manager"
 echo "=================================================="
 
 # 1. Comprobar e instalar dependencias básicas del sistema
@@ -53,24 +53,24 @@ fi
 # 3. Asignar permisos de ejecución
 chmod +x "$DESTINO"
 
-# 4. Configurar el alias en ~/.bashrc apuntando a la ruta local
+# 4. Configurar el alias 'k3smanager' en ~/.bashrc
 echo -e "\n3. Configurando el alias para el autocompletado..."
-ALIAS_LINE="alias k3s='source $DESTINO'"
+ALIAS_LINE="alias k3smanager='source $DESTINO'"
 
-# Si existía un alias previo sobre k3s, lo actualizamos con la nueva ruta local
-if grep -q "alias k3s=" ~/.bashrc 2>/dev/null; then
-    sed -i '/alias k3s=/d' ~/.bashrc
+# Si existía un alias previo sobre k3smanager, lo actualizamos con la nueva ruta local
+if grep -q "alias k3smanager=" ~/.bashrc 2>/dev/null; then
+    sed -i '/alias k3smanager=/d' ~/.bashrc
 fi
 
 echo "" >> ~/.bashrc
-echo "# Alias Consola K3s Interactiva" >> ~/.bashrc
+echo "# Alias K3s Manager" >> ~/.bashrc
 echo "$ALIAS_LINE" >> ~/.bashrc
-echo "   [OK] Alias 'k3s' actualizado en ~/.bashrc apuntando a $DESTINO."
+echo "   [OK] Alias 'k3smanager' configurado en ~/.bashrc apuntando a $DESTINO."
 
 echo -e "\n=================================================="
 echo " ¡Instalación completada con éxito!"
 echo " Para aplicar los cambios inmediatamente ejecuta:"
 echo "   source ~/.bashrc"
 echo ""
-echo " Luego simplemente escribe: k3s"
+echo " Luego simplemente escribe: k3smanager"
 echo "=================================================="
