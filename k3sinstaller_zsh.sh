@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # --- CONFIGURACIÓN DE TU REPOSITORIO ---
-GITHUB_USER="TU_USUARIO"
-REPO_NAME="TU_REPOSITORIO"
+GITHUB_USER="braispm9"
+REPO_NAME="K3S-Manager"
 BRANCH="main"
-SCRIPT_NAME="script.sh"
+SCRIPT_NAME="k3smanager.sh"
 
 # URL directa para descargar el archivo raw desde GitHub
 URL_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
