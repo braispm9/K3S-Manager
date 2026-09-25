@@ -118,35 +118,34 @@ actualizar_k3smanager() {
     BRANCH="main"
     SCRIPT_NAME="k3smanager.sh"
     
-    RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}?t=$(date +%s)"
+    # URL de la API oficial para evitar la caché de CDN Fastly/GitHub Raw
+    API_URL="https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/${SCRIPT_NAME}?ref=${BRANCH}"
 
-    # Detectar con precisión la ruta real del archivo en disco
+    # Detectar la ruta real del script en ejecución
     if [ -n "$ZSH_VERSION" ]; then
         ORIGEN="${(%):-%x}"
     else
         ORIGEN="${BASH_SOURCE[0]:-$0}"
     fi
 
-    # Resolver enlaces simbólicos / rutas relativas
     RUTA_DESTINO="$(readlink -f "$ORIGEN" 2>/dev/null || realpath "$ORIGEN" 2>/dev/null || echo "$ORIGEN")"
-
     TEMP_FILE=$(mktemp)
     
-    if curl -fsSL -H "Cache-Control: no-cache" -o "$TEMP_FILE" "$RAW_URL"; then
+    # Petición a la API usando la cabecera 'application/vnd.github.v3.raw'
+    if curl -fsSL -H "Accept: application/vnd.github.v3.raw" -H "Cache-Control: no-cache" -o "$TEMP_FILE" "$API_URL"; then
         if [ -s "$TEMP_FILE" ]; then
             mv "$TEMP_FILE" "$RUTA_DESTINO"
             chmod +x "$RUTA_DESTINO"
-            echo "   [OK] Script actualizado correctamente en:"
-            echo "        $RUTA_DESTINO"
+            echo "   [OK] Versión en tiempo real descargada correctamente."
             echo "=========================================="
             return 0
         else
-            echo "   [X] Error: El archivo descargado está vacío."
+            echo "   [X] Error: El archivo recibido está vacío."
             rm -f "$TEMP_FILE"
             return 1
         fi
     else
-        echo "   [X] Error al descargar el archivo desde GitHub."
+        echo "   [X] Error al conectar con la API de GitHub."
         rm -f "$TEMP_FILE"
         return 1
     fi
