@@ -478,6 +478,19 @@ while true; do
         update|upgrade)
             actualizar_k3smanager
             ;;
+
+        create|run)
+            NOMBRE_POD=${INPUT[1]}
+            IMAGEN_POD=${INPUT[2]}
+
+            if [ -z "$NOMBRE_POD" ] || [ -z "$IMAGEN_POD" ]; then
+                echo "Uso: create <nombre_pod> <imagen>"
+                echo "Ejemplo: create nginx-test nginx:latest"
+            else
+                echo "Creando pod '$NOMBRE_POD' con la imagen '$IMAGEN_POD'..."
+                kubectl run "$NOMBRE_POD" --image="$IMAGEN_POD"
+            fi
+            ;;
         
         *)
             echo "Comando no reconocido: '$ACCION'. Escribe 'help' para ayuda."
