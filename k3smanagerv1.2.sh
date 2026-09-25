@@ -1,5 +1,24 @@
 #!/bin/bash
 
+# --- CONFIGURACIÓN DE AUTOCOMPLETADO CON READLINE ---
+
+# Lista de todos los comandos principales
+COMANDOS_AUTOCOMPLETE=("pods" "list" "add" "select" "remove" "deselect" "show" "clear-sel" "clear" "describe" "logs" "delete" "test-network" "test-connections" "help" "exit" "quit")
+
+_autocompletar_consola() {
+    local cur
+    # Obtener la palabra actual que el usuario está escribiendo
+    cur="${READLINE_LINE:0:$READLINE_POINT}"
+    
+    # Generar coincidencias con la lista de comandos
+    COMPREPLY=($(compgen -W "${COMANDOS_AUTOCOMPLETE[*]}" -- "$cur"))
+}
+
+# Habilitar el autocompletado en la sesión
+if [[ $- == *i* ]] || [ -t 0 ]; then
+    bind -x '"\t": _autocompletar_consola' 2>/dev/null
+fi
+
 # --- VARIABLES GLOBALES ---
 SELECCIONADOS_PODS=()
 SELECCIONADOS_NAMESPACES=()
@@ -50,17 +69,11 @@ mostrar_ayuda() {
         test-network)
             echo -e "\nUSO: test-network [número | -a | --all]"
             echo "Prueba la conexión desde un pod de prueba hacia las máquinas nginx-prueba."
-            echo "Ejemplos:"
-            echo "  test-network 20     -> Prueba de la máquina 1 a la 20."
-            echo "  test-network -a     -> Prueba con TODAS las máquinas detectadas."
-            echo "  test-network --all  -> Prueba con TODAS las máquinas detectadas."
             echo ""
             ;;
         test-connections)
             echo -e "\nUSO: test-connections [ID_ORIGEN] [ID_DESTINO]"
             echo "Realiza una petición HTTP (curl) directa entre dos pods especificados por su ID."
-            echo "Ejemplo:"
-            echo "  test-connections 1 2"
             echo ""
             ;;
         clear)
@@ -93,7 +106,7 @@ obtener_pods_por_indice() {
     NS_TEMPORALES=()
 
     for id in "${ids[@]}"; do
-        if [[ "id"=~[0-9]+ ]] && [ "id"-ge1]&&["id" -le "${#PODS_LIST[@]}" ]; then
+        if [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -ge 1 ] && [ "$id" -le "${#PODS_LIST[@]}" ]; then
             idx=$((id - 1))
             PODS_TEMPORALES+=("${PODS_LIST[$idx]}")
             NS_TEMPORALES+=("${PODS_NS_LIST[$idx]}")
@@ -112,7 +125,7 @@ añadir_a_seleccion() {
             local existe=0
 
             for j in "${!SELECCIONADOS_PODS[@]}"; do
-                if [ "${SELECCIONADOS_PODS[$j]}" == "pod"]&&["{SELECCIONADOS_NAMESPACES[$j]}" == "$ns" ]; then
+                if [ "${SELECCIONADOS_PODS[$j]}" == "$pod" ] && [ "${SELECCIONADOS_NAMESPACES[$j]}" == "$ns" ]; then
                     existe=1
                     break
                 fi
@@ -138,7 +151,7 @@ quitar_de_seleccion() {
             NUEVA_NS=()
 
             for j in "${!SELECCIONADOS_PODS[@]}"; do
-                if [ "${SELECCIONADOS_PODS[$j]}" != "podquitar"]||["{SELECCIONADOS_NAMESPACES[$j]}" != "$ns_quitar" ]; then
+                if [ "${SELECCIONADOS_PODS[$j]}" != "$pod_quitar" ] || [ "${SELECCIONADOS_NAMESPACES[$j]}" != "$ns_quitar" ]; then
                     NUEVA_PODS+=("${SELECCIONADOS_PODS[$j]}")
                     NUEVA_NS+=("${SELECCIONADOS_NAMESPACES[$j]}")
                 fi
@@ -157,13 +170,12 @@ probar_red_cluster() {
     local arg="$1"
     local total_maquinas=0
 
-    # Determinar si es -a / --all o un entero explícito
-    if [ "arg"=="-a"]||["arg" == "--all" ] || [ -z "$arg" ]; then
+    if [ "$arg" == "-a" ] || [ "$arg" == "--all" ] || [ -z "$arg" ]; then
         total_maquinas=$(kubectl get pods --all-namespaces --no-headers | grep -c "nginx-prueba" 2>/dev/null)
         if [ "$total_maquinas" -eq 0 ]; then
             total_maquinas=50
         fi
-    elif [[ "arg"=~[0-9]+ ]]; then
+    elif [[ "$arg" =~ ^[0-9]+$ ]]; then
         total_maquinas=$arg
     else
         echo "Opción no reconocida para test-network. Usa un número, -a o --all."
@@ -179,9 +191,9 @@ probar_red_cluster() {
     rm -f conexion.log >/dev/null 2>&1
 
     for ((i=1; i<=total_maquinas; i++)); do
-        STATUS=(kubectlexecprobador-red--curl-s-o/dev/null-w"%httpcode""http://nginx-prueba-i" 2>/dev/null)
+        STATUS=$(kubectl exec probador-red -- curl -s -o /dev/null -w "%{http_code}" "http://nginx-prueba-$i" 2>/dev/null)
 
-        if [[ ! "STATUS"=~[0-9]+ ]] || [ "$STATUS" -ne 200 ]; then
+        if [[ ! "$STATUS" =~ ^[0-9]+$ ]] || [ "$STATUS" -ne 200 ]; then
             echo "[X] Máquina $i Error de conexión (HTTP ${STATUS:-SIN RESPUESTA})" >> conexion.log
             ERRORES=$((ERRORES + 1))
         fi
@@ -193,8 +205,8 @@ probar_red_cluster() {
     else
         echo -e "[OK] ¡Comunicaciones exitosas con las $total_maquinas máquinas!\n"
 
-        read -p "¿Deseas cargar automáticamente estos pods en la selección? (s/n): " opcion
-        if [[ "opcion"=~[sS] ]]; then
+        read -e -p "¿Deseas cargar automáticamente estos pods en la selección? (s/n): " opcion
+        if [[ "$opcion" =~ ^[sS]$ ]]; then
             actualizar_pods "-A"
             for idx in "${!PODS_LIST[@]}"; do
                 if [[ "${PODS_LIST[$idx]}" =~ nginx-prueba- ]]; then
@@ -212,27 +224,38 @@ probar_conexion_entre_pods() {
     local id_orig="$1"
     local id_dest="$2"
 
-    if [ -z "idorig"]||[-z"id_dest" ]; then
+    if [ -z "$id_orig" ] || [ -z "$id_dest" ]; then
         echo "Error: Debes especificar el ID de origen y destino. Ejemplo: test-connections 1 2"
         return 1
     fi
 
-    if obtener_pods_por_indice "idorig""id_dest"; then
+    if obtener_pods_por_indice "$id_orig" "$id_dest"; then
         local pod_origen="${PODS_TEMPORALES[0]}"
         local ns_origen="${NS_TEMPORALES[0]}"
         local pod_destino="${PODS_TEMPORALES[1]}"
+        local ns_destino="${NS_TEMPORALES[1]}"
 
-        echo -e "\nProbando petición desde 'podorigen'(ns_origen) hacia '$pod_destino'..."
+        # 1. Obtener la IP interna del pod destino
+        local ip_destino=$(kubectl get pod "$pod_destino" -n "$ns_destino" -o jsonpath='{.status.podIP}' 2>/dev/null)
 
-        RESPUESTA=(kubectlexec-n"ns_origen" "podorigen"--curl-s-m5"http://pod_destino" 2>&1)
+        if [ -z "$ip_destino" ]; then
+            echo "Error: No se pudo obtener la IP del pod destino '$pod_destino'."
+            return 1
+        fi
+
+        echo -e "\nProbando conectividad desde '$pod_origen' hacia '$pod_destino' ($ip_destino)..."
+
+        # 2. Intentar prueba con wget o curl (por si alguno no está instalado en el pod de origen)
+        RESPUESTA=$(kubectl exec -n "$ns_origen" "$pod_origen" -- sh -c "curl -s -m 3 http://$ip_destino || wget -qO- -T 3 http://$ip_destino" 2>&1)
         EXIT_CODE=$?
 
-        if [ $EXIT_CODE -eq 0 ]; then
-            echo -e "[OK] Respuesta recibida del pod destino:\n"
+        if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPUESTA" ]; then
+            echo -e "[OK] Conexión exitosa. Respuesta recibida del pod destino:\n"
             echo "$RESPUESTA" | head -n 10
         else
-            echo -e "[X] Error al realizar la petición desde '$pod_origen':"
+            echo -e "[X] Error de conexión hacia $ip_destino:"
             echo "$RESPUESTA"
+            echo -e "\nTip: Si el pod de origen es una imagen muy reducida sin 'curl' ni 'wget', la ejecución fallará localmente en el contenedor."
         fi
     fi
 }
@@ -241,6 +264,7 @@ probar_conexion_entre_pods() {
 
 echo "=================================================="
 echo " Consola Interactiva K3s (Gestión de Pods)"
+echo " Presiona [TAB] para autocompletar comandos."
 echo " Escribe 'help' o 'help <comando>' para asistencia."
 echo "=================================================="
 
@@ -253,7 +277,8 @@ while true; do
         PROMPT="k3s> "
     fi
 
-    read -p "$PROMPT" -a INPUT
+    # Se usa 'read -e' para habilitar las funciones de Readline (Tab completion)
+    read -e -p "$PROMPT" -a INPUT
 
     if [ ${#INPUT[@]} -eq 0 ]; then
         continue
@@ -266,7 +291,7 @@ while true; do
     case $ACCION in
         pods|list)
             FLAG="-A"
-            if [ -n "SUBACCION"]&&["SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ]; then
+            if [ -n "$SUBACCION" ] && [ "$SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ]; then
                 FLAG="-n $SUBACCION"
             fi
             actualizar_pods "$FLAG"
@@ -277,14 +302,14 @@ while true; do
                 echo -e "\nID   NAMESPACE         NOMBRE DEL POD"
                 echo "--------------------------------------------------"
                 for i in "${!PODS_LIST[@]}"; do
-                    printf "%-4d %-17s %s\n" ((i+1))"{PODS_NS_LIST[$i]}" "${PODS_LIST[$i]}"
+                    printf "%-4d %-17s %s\n" $((i + 1)) "${PODS_NS_LIST[$i]}" "${PODS_LIST[$i]}"
                 done
                 echo ""
             fi
             ;;
 
         add|select)
-            if [ "SUBACCION"=="pod"]||["SUBACCION" == "pods" ]; then
+            if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
                 PARAMS=("${ARGUMENTOS[@]}")
@@ -298,7 +323,7 @@ while true; do
             ;;
 
         remove|deselect)
-            if [ "SUBACCION"=="pod"]||["SUBACCION" == "pods" ]; then
+            if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
                 PARAMS=("${ARGUMENTOS[@]}")
@@ -343,13 +368,13 @@ while true; do
 
                     if [ "$SUBACCION" == "-l" ]; then
                         echo -e "\n=== INFORMACIÓN COMPLETA: $pod_actual (NS: $ns_actual) ==="
-                        kubectl describe pod "podactual"-n"ns_actual"
+                        kubectl describe pod "$pod_actual" -n "$ns_actual"
                     else
                         echo -e "\n=== RESUMEN DE POD: $pod_actual ==="
                         echo "Namespace: $ns_actual"
-                        kubectl get pod "podactual"-n"ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount" --no-headers 2>/dev/null | awk '{print "Estado: "$1"\nIP: "$2"\nNodo: "$3"\nReinicios: "$4}'
+                        kubectl get pod "$pod_actual" -n "$ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount" --no-headers 2>/dev/null | awk '{print "Estado: "$1"\nIP: "$2"\nNodo: "$3"\nReinicios: "$4}'
                         echo -e "\nEventos Recientes:"
-                        kubectl get events -n "nsactual"--field-selectorinvolvedObject.name="pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
+                        kubectl get events -n "$ns_actual" --field-selector involvedObject.name="$pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
                         echo "--------------------------------------------------"
                     fi
                 done
@@ -362,7 +387,7 @@ while true; do
             elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
                 echo "Error: Selecciona solo 1 pod para ver sus logs."
             else
-                kubectl logs "SELECCIONADOSPODS[0]"-n"{SELECCIONADOS_NAMESPACES[0]}"
+                kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}"
             fi
             ;;
 
@@ -372,7 +397,7 @@ while true; do
             else
                 for i in "${!SELECCIONADOS_PODS[@]}"; do
                     echo "Eliminando pod '${SELECCIONADOS_PODS[$i]}'..."
-                    kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}" --grace-period=0 --force
+                    kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}"
                 done
                 SELECCIONADOS_PODS=()
                 SELECCIONADOS_NAMESPACES=()
@@ -384,7 +409,7 @@ while true; do
             ;;
 
         test-connections)
-            probar_conexion_entre_pods "SUBACCION""{INPUT[2]}"
+            probar_conexion_entre_pods "$SUBACCION" "${INPUT[2]}"
             ;;
 
         help)
