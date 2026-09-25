@@ -28,6 +28,7 @@ mostrar_ayuda() {
         echo "  test-network [rango|-a]    - Probar conectividad global (-a o --all para todas)"
         echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods"
         echo ""
+        echo "  version                       - Verifica si es la última versión y muestra la versión actual"
         echo "  update                        - Instala la ultima version del software y se reactiva"
         echo "  help [comando]             - Ayuda general o de una función específica"
         echo -e "  exit | quit                - Salir de la consola\n"
