@@ -57,12 +57,7 @@ done
 
 # 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
-curl -L \
-  -H "Accept: application/vnd.github.object" \
-  -H "Authorization: Bearer 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" \
-  -H "X-GitHub-Api-Version: 2026-03-10" \
-  -o "$DESTINO" \
-  https://api.github.com/repos/braispm9/K3S-Manager/contents/main/k3smanager.sh
+git clone https://braispm9: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@github.com/braispm9/K3S-Manager/k3smanager.sh.git
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
     echo "   [OK] Script descargado correctamente en: $DESTINO"
