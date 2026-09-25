@@ -295,7 +295,7 @@ echo "=================================================="
 actualizar_pods "-A"
 
 while true; do
-    
+    read -r -p "k3s> " ENTRADA_RAW
     # Si se presiona Enter sin escribir nada, continua
     if [ -z "$ENTRADA_RAW" ]; then
         continue
