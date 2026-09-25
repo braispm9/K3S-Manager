@@ -320,6 +320,20 @@ actualizar_pods "-A"
 # Habilitar autocompletado mediante el historial/Readline interno de Bash
 bind 'TAB: complete' 2>/dev/null
 
+# --- CONFIGURACIÓN DE AUTOCOMPLETADO (BASH Y ZSH) ---
+
+# Lista de comandos disponibles en tu consola
+COMANDOS_K3S="pods list add select remove deselect show clear-sel clear describe logs delete test-network test-connections update help exit quit"
+
+if [ -n "$ZSH_VERSION" ]; then
+    # Configuración de completado nativo para Zsh (vared)
+    autoload -U compinit && compinit 2>/dev/null
+    compctl -k "($COMANDOS_K3S)" read
+else
+    # Configuración de completado nativo para Bash (Readline)
+    complete -W "$COMANDOS_K3S" read 2>/dev/null
+fi
+
 while true; do
     
     if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
