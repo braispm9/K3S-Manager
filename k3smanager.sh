@@ -86,6 +86,49 @@ mostrar_ayuda() {
     esac
 }
 
+actualizar_k3smanager() {
+    echo "=========================================="
+    echo " Actualizando K3s Manager desde GitHub..."
+    echo "=========================================="
+
+    # URL del archivo raw en GitHub (mismos parámetros del instalador)
+    GITHUB_USER="braispm9"
+    REPO_NAME="K3S-Manager"
+    BRANCH="main"
+    SCRIPT_NAME="k3smanager.sh"
+    RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+
+    # Obtener la ruta real del script que se está ejecutando actualmente
+    # Usamos $BASH_SOURCE o $0 según el entorno
+    SCRIPT_ACTUAL="${BASH_SOURCE[0]:-$0}"
+    RUTA_ABSOLUTA="$(readlink -f "$SCRIPT_ACTUAL" 2>/dev/null || realpath "$SCRIPT_ACTUAL" 2>/dev/null || echo "$SCRIPT_ACTUAL")"
+
+    # Descargar la última versión a un archivo temporal
+    TEMP_FILE=$(mktemp)
+    
+    if curl -fsSL -o "$TEMP_FILE" "$RAW_URL"; then
+        if [ -s "$TEMP_FILE" ]; then
+            # Reemplazar el archivo actual con la versión descargada
+            mv "$TEMP_FILE" "$RUTA_ABSOLUTA"
+            chmod +x "$RUTA_ABSOLUTA"
+            echo "   [OK] Actualización descargada con éxito."
+            echo "=========================================="
+            echo " Reiniciando K3s Manager..."
+            echo "=========================================="
+            sleep 1
+
+            # Reiniciar la sesión actual del script recargando el archivo actualizado
+            exec source "$RUTA_ABSOLUTA"
+        else
+            echo "   [X] Error: El archivo descargado está vacío."
+            rm -f "$TEMP_FILE"
+        fi
+    else
+        echo "   [X] Error al descargar la actualización desde GitHub."
+        rm -f "$TEMP_FILE"
+    fi
+}
+
 actualizar_pods() {
     local ns_flag="${1:---all-namespaces}"
     PODS_LIST=()
@@ -427,6 +470,10 @@ while true; do
             break
             ;;
 
+        update|upgrade)
+            actualizar_k3smanager
+            ;;
+        
         *)
             echo "Comando no reconocido: '$ACCION'. Escribe 'help' para ayuda."
             ;;
