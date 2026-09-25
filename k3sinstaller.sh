@@ -35,11 +35,10 @@ DEPENDENCIAS=("curl" "fzf")
 if command -v kubectl &>/dev/null; then
     echo "[OK] Kubernetes"
 else
-    apt-get install -y apt-transport-https ca-certificates curl gnupg
-    mkdir -p /etc/apt/keyrings
-    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | gpg --dearmor -o /etc/apt/keyring/kubernetes-apt-keyring.gpg
-    echo 'deb [signd-by=/etc/apt/keyring/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-    apt-get install -y kubectl
+      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
+      echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+      sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 fi
 for dep in "${DEPENDENCIAS[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
