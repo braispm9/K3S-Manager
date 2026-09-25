@@ -58,7 +58,6 @@ done
 
 # 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
-
 RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
 
 curl -fsSL -o "$DESTINO" "$RAW_URL"
