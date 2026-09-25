@@ -103,6 +103,15 @@ echo "$ALIAS_LINE" >> "$RC_FILE"
 # Ajustar propietarios del archivo de configuración editado
 chown "$REAL_USER" "$RC_FILE" 2>/dev/null
 
+# Cargar k3s como última dependencia
+if command -v k3s &>/dev/null; then
+    echo "[OK] K3S"
+else
+    curl -sfL https://get.k3s.io | sh -
+    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fi
+
 echo "   [OK] Alias 'k3smanager' configurado en $RC_FILE"
 
 echo -e "\n=================================================="
