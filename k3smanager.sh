@@ -118,26 +118,26 @@ actualizar_k3smanager() {
     BRANCH="main"
     SCRIPT_NAME="k3smanager.sh"
     
-    # Añadimos un parámetro de tiempo (?t=...) para saltarnos la caché de GitHub/curl
     RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}?t=$(date +%s)"
 
-    # Obtener ruta absoluta del script actual
+    # Detectar con precisión la ruta real del archivo en disco
     if [ -n "$ZSH_VERSION" ]; then
-        SCRIPT_ACTUAL="${(%):-%x}"
+        ORIGEN="${(%):-%x}"
     else
-        SCRIPT_ACTUAL="${BASH_SOURCE[0]}"
+        ORIGEN="${BASH_SOURCE[0]:-$0}"
     fi
-    
-    RUTA_ABSOLUTA="$(readlink -f "$SCRIPT_ACTUAL" 2>/dev/null || realpath "$SCRIPT_ACTUAL" 2>/dev/null || echo "$SCRIPT_ACTUAL")"
+
+    # Resolver enlaces simbólicos / rutas relativas
+    RUTA_DESTINO="$(readlink -f "$ORIGEN" 2>/dev/null || realpath "$ORIGEN" 2>/dev/null || echo "$ORIGEN")"
 
     TEMP_FILE=$(mktemp)
     
-    # -H "Cache-Control: no-cache" fuerza a descargar la versión más reciente
     if curl -fsSL -H "Cache-Control: no-cache" -o "$TEMP_FILE" "$RAW_URL"; then
         if [ -s "$TEMP_FILE" ]; then
-            mv "$TEMP_FILE" "$RUTA_ABSOLUTA"
-            chmod +x "$RUTA_ABSOLUTA"
-            echo "   [OK] Nueva versión descargada correctamente en: $RUTA_ABSOLUTA"
+            mv "$TEMP_FILE" "$RUTA_DESTINO"
+            chmod +x "$RUTA_DESTINO"
+            echo "   [OK] Script actualizado correctamente en:"
+            echo "        $RUTA_DESTINO"
             echo "=========================================="
             return 0
         else
@@ -146,7 +146,7 @@ actualizar_k3smanager() {
             return 1
         fi
     else
-        echo "   [X] Error al descargar desde GitHub."
+        echo "   [X] Error al descargar el archivo desde GitHub."
         rm -f "$TEMP_FILE"
         return 1
     fi
@@ -482,8 +482,12 @@ while true; do
             ;;
 
         update)
-            actualizar_k3smanager
-            source "$RUTA_ABSOLUTA"
+            if actualizar_k3smanager; then
+                echo -e "\nRecargando K3s Manager..."
+                sleep 1
+                source "$RUTA_DESTINO" 2>/dev/null || source "$RUTA_ABSOLUTA" 2>/dev/null
+                break
+            fi
             ;;
 
         create)
