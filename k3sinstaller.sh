@@ -7,7 +7,7 @@ BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 
 # URL directa para descargar el archivo raw desde GitHub
-URL_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+URL_RAW="https://raw.githubusercontent.com/braispm9/K3S-Manager/refs/heads/main/k3smanager.sh?token=GHSAT0AAAAAAEKGUXA2Z64WNWSVD3QJIODA2VWOWDA"
 
 # Guardado el script en la carpeta actual donde se ejecuta el instalador
 DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
