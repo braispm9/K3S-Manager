@@ -28,7 +28,7 @@ mostrar_ayuda() {
         echo "  test-network [rango|-a]    - Probar conectividad global (-a o --all para todas)"
         echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods"
         echo ""
-        echo "  updat                        - Instala la ultima version del software y se reactiva"
+        echo "  update                        - Instala la ultima version del software y se reactiva"
         echo "  help [comando]             - Ayuda general o de una función específica"
         echo -e "  exit | quit                - Salir de la consola\n"
         return
@@ -491,7 +491,7 @@ while true; do
             
         version)
             echo "Está es la versión 1.3"
-            comprobar_actualizacion()
+            comprobar_actualizacion
             ;;
         
         *)
