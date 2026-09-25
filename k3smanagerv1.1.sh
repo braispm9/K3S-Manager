@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # --- VARIABLES GLOBALES ---
 SELECCIONADOS_PODS=()
 SELECCIONADOS_NAMESPACES=()
