@@ -8,7 +8,7 @@ SCRIPT_NAME="k3smanager.sh"
 
 # URL directa para descargar el archivo raw desde GitHub
 URL_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
-DESTINO="$HOME/.k3s_console.sh"
+DESTINO=".k3s_console.sh"
 
 echo "=================================================="
 echo " Instalador Automático de la Consola K3s"
