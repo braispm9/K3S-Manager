@@ -443,6 +443,7 @@ while true; do
 
         update)
             actualizar_k3smanager
+            source "$RUTA_ABSOLUTA"
             ;;
 
         create)
