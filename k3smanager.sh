@@ -68,6 +68,36 @@ mostrar_ayuda() {
     esac
 }
 
+comprobar_actualizacion() {
+    GITHUB_USER="braispm9"
+    REPO_NAME="K3S-Manager"
+    BRANCH="main"
+
+    echo "Verificando versión con GitHub..."
+
+    # Obtener el hash del último commit de la rama main en GitHub
+    REMOTE_HASH=$(curl -s "https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/commits/${BRANCH}" | grep -m1 '"sha":' | cut -d'"' -f4)
+
+    if [ -z "$REMOTE_HASH" ]; then
+        echo "  [X] No se pudo conectar con GitHub para comprobar la versión."
+        return 1
+    fi
+
+    # Si tu carpeta local es un repositorio Git, compara directamente
+    if command -v git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null; then
+        LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
+        if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
+            echo "  [OK] Estás utilizando la última versión."
+        else
+            echo "  [!] Hay una nueva versión disponible. Ejecuta 'update' para actualizar."
+        fi
+    else
+        # Si no usas Git localmente, descargamos el header ETag (MD5/SHA del archivo raw)
+        REMOTE_ETAG=$(curl -sI "https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3smanager.sh?t=$(date +%s)" | grep -i "etag" | tr -d '\r')
+        echo "  [i] Conexión correcta con GitHub. Si notas cambios pendientes en el repositorio, ejecuta 'update'."
+    fi
+}
+
 actualizar_k3smanager() {
     echo "=========================================="
     echo " Actualizando K3s Manager desde GitHub..."
@@ -457,6 +487,10 @@ while true; do
                 echo "Creando pod '$NOMBRE_POD' con la imagen '$IMAGEN_POD'..."
                 kubectl run "$NOMBRE_POD" --image="$IMAGEN_POD"
             fi
+            ;;
+        version)
+            echo "Está es la versión 1.3"
+            comprobar_actualizacion()
             ;;
         
         *)
