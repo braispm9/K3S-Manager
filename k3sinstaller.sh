@@ -64,7 +64,7 @@ curl -L \
   -H "Accept: application/vnd.github.object" \
   -H "Authorization: Bearer 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" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
-  -o "$DESTINO"
+  -o "$DESTINO" \
   https://api.github.com/repos/braispm9/K3S-Manager/main/k3smanager.sh
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
