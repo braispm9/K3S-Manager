@@ -341,6 +341,7 @@ actualizar_pods "-A"
 while true; do
     PROMPT="${PROMPT:-k3s> }"
 
+    # --- AQUÍ VA EL BLOQUE ---
     if [ -n "$BASH_VERSION" ]; then
         set -o history
         read -e -r -p "$PROMPT" ENTRADA_RAW
@@ -349,6 +350,7 @@ while true; do
     else
         read -r -p "$PROMPT" ENTRADA_RAW
     fi
+    # -------------------------
 
     # Ignorar si el usuario solo pulsa Enter
     [ -z "$ENTRADA_RAW" ] && continue
