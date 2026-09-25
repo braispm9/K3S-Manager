@@ -337,10 +337,10 @@ while true; do
 
     PROMPT="${PROMPT:-k3s> }"
     
-    read -r -p "k3s> " ENTRADA_RAW
-    # Si se presiona Enter sin escribir nada, continua
-    if [ -z "$ENTRADA_RAW" ]; then
-        continue
+    if [ -n "$ZSH_VERSION" ]; then
+        read -r "ENTRADA_RAW?$PROMPT"
+    else
+        read -r -p "$PROMPT" ENTRADA_RAW
     fi
 
     # Convertimos la cadena de texto en un array de palabras
@@ -513,7 +513,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.3.5"
+            echo "Esta es la versión 1.3.6"
             comprobar_actualizacion
             ;;
         
@@ -522,4 +522,3 @@ while true; do
             ;;
     esac
 done
-}
