@@ -338,9 +338,9 @@ while true; do
     PROMPT="${PROMPT:-k3s> }"
     
     if [ -n "$ZSH_VERSION" ]; then
-        read -r "ENTRADA_RAW?$PROMPT"
+        read -r "ENTRADA_RAW?$PROMPT" < /dev/tty
     else
-        read -r -p "$PROMPT" ENTRADA_RAW
+        read -r -p "$PROMPT" ENTRADA_RAW < /dev/tty
     fi
 
     # Convertimos la cadena de texto en un array de palabras
@@ -485,16 +485,18 @@ while true; do
 
         update)
             if actualizar_k3smanager; then
-                echo -e "\nRecargando K3s Manager..."
+                echo -e "\nRecargando K3s Manager...\n"
                 sleep 1
+
+                # Restablecer la variable global explícitamente
+                export PROMPT="k3s> "
+
+                # Recargar funciones en memoria y reiniciar el bucle desde la TTY activa
+                if [ -n "$RUTA_DESTINO" ] && [ -f "$RUTA_DESTINO" ]; then
+                    source "$RUTA_DESTINO"
+                fi
                 
-                # Definir de nuevo la variable explícitamente
-                PROMPT="k3s> "
-                
-                # Volver a cargar el código descargado en la sesión activa
-                source "$RUTA_DESTINO" 2>/dev/null || source "$RUTA_ABSOLUTA"
-                
-                # Salir de este bucle viejo para que tome el control el recién cargado
+                # Salir del bucle antiguo para ceder el control a la nueva versión
                 break
             fi
             ;;
@@ -513,7 +515,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.3.6"
+            echo "Esta es la versión 1.3.7"
             comprobar_actualizacion
             ;;
         
