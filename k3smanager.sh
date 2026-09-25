@@ -46,6 +46,7 @@ mostrar_ayuda() {
         echo "  describe [-l]              - Ver información resumida o completa (-l) de la selección"
         echo "  logs                       - Mostrar logs (requiere seleccionar solo 1 pod)"
         echo "  delete                     - Eliminar el/los pod(s) seleccionados"
+        echo "  create <nombre> <imagen>   - Crea un pod con nombre e imagen proporcionados"
         echo ""
         echo "Pruebas de Red y Diagnóstico:"
         echo "  test-network [rango|-a]    - Probar conectividad global (-a o --all para todas)"
@@ -470,16 +471,16 @@ while true; do
             mostrar_ayuda "$SUBACCION"
             ;;
 
-        exit|quit)
+        exit)
             echo "Saliendo de la consola K3s..."
             break
             ;;
 
-        update|upgrade)
+        update)
             actualizar_k3smanager
             ;;
 
-        create|run)
+        create)
             NOMBRE_POD=${INPUT[1]}
             IMAGEN_POD=${INPUT[2]}
 
