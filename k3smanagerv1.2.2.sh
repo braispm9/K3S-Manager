@@ -276,16 +276,27 @@ while true; do
         PROMPT="k3s> "
     fi
     
-    # Se usa 'read -e' para habilitar las funciones de Readline (Tab completion)
-    read -e -p "$PROMPT" -a INPUT
+    # --- NUEVO BLOQUE CON FZF ---
+    # Muestra el menú de comandos con búsqueda interactiva
+    SELECCION=$(printf "%s\n" "pods" "add" "remove" "show" "describe" "describe -l" "logs" "delete" "test-network" "test-connections" "clear" "clear-sel" "help" "exit" | fzf --prompt="$PROMPT" --height=40% --reverse)
 
-    if [ ${#INPUT[@]} -eq 0 ]; then
+    if [ -z "$SELECCION" ]; then
         continue
     fi
 
+    # Separamos la acción principal de los argumentos si la opción elegida tiene espacios (ej: 'describe -l')
+    read -a INPUT <<< "$SELECCION"
     ACCION=${INPUT[0]}
     SUBACCION=${INPUT[1]}
     ARGUMENTOS=("${INPUT[@]:1}")
+
+    # Si el comando requiere argumentos extra (como IDs para 'add' o 'remove'), los pedimos a continuación:
+    if [[ "$ACCION" == "add" || "$ACCION" == "remove" || "$ACCION" == "test-connections" || "$ACCION" == "help" ]]; then
+        read -e -p "Introduce los parámetros para $ACCION: " PARAMS_EXTRA
+        read -a ARG_ARRAY <<< "$PARAMS_EXTRA"
+        SUBACCION=${ARG_ARRAY[0]}
+        ARGUMENTOS=("${ARG_ARRAY[@]}")
+    fi
 
     case $ACCION in
         pods|list)
