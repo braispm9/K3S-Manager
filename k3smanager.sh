@@ -339,38 +339,28 @@ echo "=================================================="
 actualizar_pods "-A"
 
 while true; do
-
     PROMPT="${PROMPT:-k3s> }"
-    
-    if [ -n "$ZSH_VERSION" ]; then
-        read -r "ENTRADA_RAW?$PROMPT" < /dev/tty
+
+    if [ -n "$BASH_VERSION" ]; then
+        set -o history
+        read -e -r -p "$PROMPT" ENTRADA_RAW
+    elif [ -n "$ZSH_VERSION" ]; then
+        read -r "ENTRADA_RAW?$PROMPT"
     else
-        read -r -p "$PROMPT" ENTRADA_RAW < /dev/tty
+        read -r -p "$PROMPT" ENTRADA_RAW
     fi
 
-    if [ -n "$ENTRADA_RAW" ]; then
+    # Ignorar si el usuario solo pulsa Enter
+    [ -z "$ENTRADA_RAW" ] && continue
+
+    # Guardar en la pila del historial para que la flecha Arriba lo recupere
+    if [ -n "$BASH_VERSION" ]; then
         history -s "$ENTRADA_RAW" 2>/dev/null
-    else
-        continue
     fi
 
-    # Convertimos la cadena de texto en un array de palabras
-    read -a INPUT <<< "$ENTRADA_RAW"
-    
-    # Guardar cada comando no vacío en el historial de Bash
-    if [ -n "$ENTRADA_RAW" ]; then
-        history -s "$ENTRADA_RAW" 2>/dev/null
-    else
-        continue
-    fi
-
-    # Separar comandos y argumentos
-    read -r -a PARTES <<< "$ENTRADA_RAW"
-    COMANDO="${PARTES[0]}"
-    ARGUMENTOS=("${PARTES[@]:1}")
-
-    ACCION=${INPUT[0]}
-    SUBACCION=${INPUT[1]}
+    # Parsear el comando y sus argumentos
+    read -r -a INPUT <<< "$ENTRADA_RAW"
+    COMANDO="${INPUT[0]}"
     ARGUMENTOS=("${INPUT[@]:1}")
 
     case $ACCION in
@@ -538,7 +528,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.4"
+            echo "Esta es la versión 1.4.1"
             comprobar_actualizacion
             ;;
         
