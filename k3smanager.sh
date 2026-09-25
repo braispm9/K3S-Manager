@@ -4,30 +4,6 @@ if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
 
-# --- CONFIGURACIÓN DE AUTOCOMPLETADO (READLINE) ---
-
-# 1. Habilitar explícitamente readline para el script
-set -o emacs 2>/dev/null
-
-# Lista de comandos disponibles
-COMANDOS_AUTOCOMPLETE="pods list add select remove deselect show clear-sel clear describe logs delete test-network test-connections help exit quit"
-
-# Función encargada de buscar coincidencias al presionar Tab
-_completar_comandos() {
-    local cur
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    COMPREPLY=( $(compgen -W "$COMANDOS_AUTOCOMPLETE" -- "$cur") )
-}
-
-# Registrar la función de autocompletado para el contexto actual
-complete -F _completar_comandos -o default read 2>/dev/null
-
-# --- VARIABLES GLOBALES ---
-SELECCIONADOS_PODS=()
-SELECCIONADOS_NAMESPACES=()
-PODS_LIST=()
-PODS_NS_LIST=()
-
 # --- FUNCIONES DE AYUDA Y CONSOLA INTERACTIVA ---
 
 mostrar_ayuda() {
@@ -311,43 +287,12 @@ probar_conexion_entre_pods() {
 
 echo "=================================================="
 echo " Consola Interactiva K3s (Gestión de Pods)"
-echo " Escribe un comando. Usa [TAB] para autocompletar."
 echo " Escribe 'help' o 'help <comando>' para asistencia."
 echo "=================================================="
 
 actualizar_pods "-A"
 
-# Habilitar autocompletado mediante el historial/Readline interno de Bash
-bind 'TAB: complete' 2>/dev/null
-
-# --- CONFIGURACIÓN DE AUTOCOMPLETADO (BASH Y ZSH) ---
-
-# Lista de comandos disponibles en tu consola
-COMANDOS_K3S="pods list create select remove deselect show clear-sel clear describe logs delete test-network test-connections update help exit quit"
-
-if [ -n "$ZSH_VERSION" ]; then
-    # Configuración de completado nativo para Zsh (vared)
-    autoload -U compinit && compinit 2>/dev/null
-    compctl -k "($COMANDOS_K3S)" read
-else
-    # Configuración de completado nativo para Bash (Readline)
-    complete -W "$COMANDOS_K3S" read 2>/dev/null
-fi
-
 while true; do
-
-    if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
-        PROMPT="k3s [${#SELECCIONADOS_PODS[@]} pods sel]> "
-    else
-        PROMPT="k3s> "
-    fi
-
-    # En Bash se usa 'read -e'. En Zsh 'vared' o 'read' con el módulo zle.
-    if [ -n "$ZSH_VERSION" ]; then
-        read -r "ENTRADA_RAW?$PROMPT"
-    else
-        read -e -p "$PROMPT" ENTRADA_RAW
-    fi
     
     # Si se presiona Enter sin escribir nada, continua
     if [ -z "$ENTRADA_RAW" ]; then
