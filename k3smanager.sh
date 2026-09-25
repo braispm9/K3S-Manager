@@ -34,7 +34,7 @@ mostrar_ayuda() {
     local cmd="$1"
 
     if [ -z "$cmd" ]; then
-        echo -e "\nComados disponibles para Pods:"
+        echo -e "\nComandos disponibles para Pods:"
         echo "  pods [namespace|-A]        - Listar pods con su ID numérico (-A para todos)"
         echo "  add pod <IDs...>           - Añadir pod(s) a la selección activa (ej: add pod 1 2)"
         echo "  remove pod <IDs...>        - Quitar pod(s) de la selección activa (ej: remove pod 1)"
