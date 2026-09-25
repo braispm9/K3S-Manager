@@ -324,6 +324,11 @@ probar_conexion_entre_pods() {
     fi
 }
 
+# Habilitar el guardado de historial en la sesión del script
+HISTFILE=~/.k3smanager_history
+HISTSIZE=1000
+SAVEHIST=1000
+
 # --- BUCLE PRINCIPAL (TERMINAL INTERACTIVA) ---
 
 echo "=================================================="
@@ -343,8 +348,26 @@ while true; do
         read -r -p "$PROMPT" ENTRADA_RAW < /dev/tty
     fi
 
+    if [ -n "$ENTRADA_RAW" ]; then
+        history -s "$ENTRADA_RAW" 2>/dev/null
+    else
+        continue
+    fi
+
     # Convertimos la cadena de texto en un array de palabras
     read -a INPUT <<< "$ENTRADA_RAW"
+    
+    # Guardar cada comando no vacío en el historial de Bash
+    if [ -n "$ENTRADA_RAW" ]; then
+        history -s "$ENTRADA_RAW" 2>/dev/null
+    else
+        continue
+    fi
+
+    # Separar comandos y argumentos
+    read -r -a PARTES <<< "$ENTRADA_RAW"
+    COMANDO="${PARTES[0]}"
+    ARGUMENTOS=("${PARTES[@]:1}")
 
     ACCION=${INPUT[0]}
     SUBACCION=${INPUT[1]}
@@ -515,7 +538,7 @@ while true; do
             ;;
             
         version)
-            echo "Esta es la versión 1.3.7"
+            echo "Esta es la versión 1.4"
             comprobar_actualizacion
             ;;
         
