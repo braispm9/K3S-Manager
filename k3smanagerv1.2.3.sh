@@ -263,11 +263,14 @@ probar_conexion_entre_pods() {
 
 echo "=================================================="
 echo " Consola Interactiva K3s (Gestión de Pods)"
-echo " Presiona [TAB] para autocompletar comandos."
+echo " Escribe un comando. Usa [TAB] para autocompletar."
 echo " Escribe 'help' o 'help <comando>' para asistencia."
 echo "=================================================="
 
 actualizar_pods "-A"
+
+# Habilitar autocompletado mediante el historial/Readline interno de Bash
+bind 'TAB: complete' 2>/dev/null
 
 while true; do
     if [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
@@ -275,28 +278,21 @@ while true; do
     else
         PROMPT="k3s> "
     fi
-    
-    # --- NUEVO BLOQUE CON FZF ---
-    # Muestra el menú de comandos con búsqueda interactiva
-    SELECCION=$(printf "%s\n" "pods" "add" "remove" "show" "describe" "describe -l" "logs" "delete" "test-network" "test-connections" "clear" "clear-sel" "help" "exit" | fzf --prompt="$PROMPT" --height=40% --reverse)
 
-    if [ -z "$SELECCION" ]; then
+    # Permite escribir todo junto (ejemplo: 'add pod 1 2' o 'test-connections 1 3')
+    read -e -p "$PROMPT" ENTRADA_RAW
+
+    # Si se presiona Enter sin escribir nada, continua
+    if [ -z "$ENTRADA_RAW" ]; then
         continue
     fi
 
-    # Separamos la acción principal de los argumentos si la opción elegida tiene espacios (ej: 'describe -l')
-    read -a INPUT <<< "$SELECCION"
+    # Convertimos la cadena de texto en un array de palabras
+    read -a INPUT <<< "$ENTRADA_RAW"
+
     ACCION=${INPUT[0]}
     SUBACCION=${INPUT[1]}
     ARGUMENTOS=("${INPUT[@]:1}")
-
-    # Si el comando requiere argumentos extra (como IDs para 'add' o 'remove'), los pedimos a continuación:
-    if [[ "$ACCION" == "add" || "$ACCION" == "remove" || "$ACCION" == "test-connections" || "$ACCION" == "help" ]]; then
-        read -e -p "Introduce los parámetros para $ACCION: " PARAMS_EXTRA
-        read -a ARG_ARRAY <<< "$PARAMS_EXTRA"
-        SUBACCION=${ARG_ARRAY[0]}
-        ARGUMENTOS=("${ARG_ARRAY[@]}")
-    fi
 
     case $ACCION in
         pods|list)
@@ -326,7 +322,7 @@ while true; do
             fi
 
             if [ ${#PARAMS[@]} -eq 0 ]; then
-                echo "Error: Indica los ID numéricos de los pods."
+                echo "Error: Indica los ID numéricos de los pods. Ejemplo: add 1 2"
             else
                 añadir_a_seleccion "${PARAMS[@]}"
             fi
@@ -340,7 +336,7 @@ while true; do
             fi
 
             if [ ${#PARAMS[@]} -eq 0 ]; then
-                echo "Error: Indica los ID numéricos de los pods."
+                echo "Error: Indica los ID numéricos de los pods. Ejemplo: remove 1"
             else
                 quitar_de_seleccion "${PARAMS[@]}"
             fi
