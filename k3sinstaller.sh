@@ -6,9 +6,6 @@ REPO_NAME="K3S-Manager"
 BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 
-# URL directa para descargar el archivo raw desde GitHub
-URL_RAW="https://raw.githubusercontent.com/braispm9/K3S-Manager/refs/heads/main/k3smanager.sh"
-
 # Guardado el script en la carpeta actual donde se ejecuta el instalador
 DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
 DESTINO="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
@@ -65,7 +62,7 @@ curl -L \
   -H "Authorization: Bearer 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" \
   -H "X-GitHub-Api-Version: 2026-03-10" \
   -o "$DESTINO" \
-  https://api.github.com/repos/braispm9/K3S-Manager/main/k3smanager.sh
+  https://api.github.com/repos/braispm9/K3S-Manager/contents/main/k3smanager.sh
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
     echo "   [OK] Script descargado correctamente en: $DESTINO"
