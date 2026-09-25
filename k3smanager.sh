@@ -323,7 +323,7 @@ bind 'TAB: complete' 2>/dev/null
 # --- CONFIGURACIÓN DE AUTOCOMPLETADO (BASH Y ZSH) ---
 
 # Lista de comandos disponibles en tu consola
-COMANDOS_K3S="pods list add select remove deselect show clear-sel clear describe logs delete test-network test-connections update help exit quit"
+COMANDOS_K3S="pods list create select remove deselect show clear-sel clear describe logs delete test-network test-connections update help exit quit"
 
 if [ -n "$ZSH_VERSION" ]; then
     # Configuración de completado nativo para Zsh (vared)
