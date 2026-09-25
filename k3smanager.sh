@@ -3,7 +3,7 @@
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
-
+export PROMPT="k3s> "
 # --- FUNCIONES DE AYUDA Y CONSOLA INTERACTIVA ---
 
 mostrar_ayuda() {
@@ -335,6 +335,9 @@ echo "=================================================="
 actualizar_pods "-A"
 
 while true; do
+
+    PROMPT="${PROMPT:-k3s> }"
+    
     read -r -p "k3s> " ENTRADA_RAW
     # Si se presiona Enter sin escribir nada, continua
     if [ -z "$ENTRADA_RAW" ]; then
@@ -485,11 +488,12 @@ while true; do
             if actualizar_k3smanager; then
                 echo -e "\nRecargando K3s Manager..."
                 sleep 1
+                PROMPT="k3s> "
                 source "$RUTA_DESTINO" 2>/dev/null || source "$RUTA_ABSOLUTA" 2>/dev/null
                 break
             fi
             ;;
-
+            
         create)
             NOMBRE_POD=${INPUT[1]}
             IMAGEN_POD=${INPUT[2]}
