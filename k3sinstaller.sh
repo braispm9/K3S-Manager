@@ -57,7 +57,9 @@ done
 
 # 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
-curl -o "k3smanager.sh" "https://raw.githubusercontent.com/braispm9/K3S-Manager/main"
+curl -sSL \
+    -o "k3smanager.sh" \
+    "https://raw.githubusercontent.com/braispm9/K3S-Manager/main"
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
     echo "   [OK] Script descargado correctamente en: $DESTINO"
