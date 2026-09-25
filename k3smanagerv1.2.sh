@@ -1,23 +1,22 @@
 #!/bin/bash
 
-# --- CONFIGURACIÓN DE AUTOCOMPLETADO CON READLINE ---
+# --- CONFIGURACIÓN DE AUTOCOMPLETADO (READLINE) ---
 
-# Lista de todos los comandos principales
-COMANDOS_AUTOCOMPLETE=("pods" "list" "add" "select" "remove" "deselect" "show" "clear-sel" "clear" "describe" "logs" "delete" "test-network" "test-connections" "help" "exit" "quit")
+# 1. Habilitar explícitamente readline para el script
+set -o emacs 2>/dev/null
 
-_autocompletar_consola() {
+# Lista de comandos disponibles
+COMANDOS_AUTOCOMPLETE="pods list add select remove deselect show clear-sel clear describe logs delete test-network test-connections help exit quit"
+
+# Función encargada de buscar coincidencias al presionar Tab
+_completar_comandos() {
     local cur
-    # Obtener la palabra actual que el usuario está escribiendo
-    cur="${READLINE_LINE:0:$READLINE_POINT}"
-    
-    # Generar coincidencias con la lista de comandos
-    COMPREPLY=($(compgen -W "${COMANDOS_AUTOCOMPLETE[*]}" -- "$cur"))
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=( $(compgen -W "$COMANDOS_AUTOCOMPLETE" -- "$cur") )
 }
 
-# Habilitar el autocompletado en la sesión
-if [[ $- == *i* ]] || [ -t 0 ]; then
-    bind -x '"\t": _autocompletar_consola' 2>/dev/null
-fi
+# Registrar la función de autocompletado para el contexto actual
+complete -F _completar_comandos -o default read 2>/dev/null
 
 # --- VARIABLES GLOBALES ---
 SELECCIONADOS_PODS=()
@@ -276,7 +275,7 @@ while true; do
     else
         PROMPT="k3s> "
     fi
-
+    
     # Se usa 'read -e' para habilitar las funciones de Readline (Tab completion)
     read -e -p "$PROMPT" -a INPUT
 
