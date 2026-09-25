@@ -17,7 +17,18 @@ echo "=================================================="
 echo " Instalador Automático de K3s Manager (Bash/Zsh)"
 echo "=================================================="
 
-# 1. Comprobar e instalar dependencias básicas del sistema
+# 1. Detectar el usuario real (si se ejecuta con sudo) y su directorio HOME
+if [ -n "$SUDO_USER" ]; then
+    REAL_USER="$SUDO_USER"
+    REAL_HOME=$(eval echo "~$SUDO_USER")
+else
+    REAL_USER="$(whoami)"
+    REAL_HOME="$HOME"
+fi
+
+echo "Instalando para el usuario: $REAL_USER ($REAL_HOME)"
+
+# 2. Comprobar e instalar dependencias básicas del sistema
 echo -e "\n1. Verificando dependencias del sistema..."
 
 DEPENDENCIAS=("curl" "kubectl")
@@ -26,9 +37,9 @@ for dep in "${DEPENDENCIAS[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
         echo "   [!] '$dep' no está instalado. Intentando instalar..."
         if command -v apt &> /dev/null; then
-            sudo apt update && sudo apt install -y "$dep"
+            apt update && apt install -y "$dep"
         elif command -v yum &> /dev/null; then
-            sudo yum install -y "$dep"
+            yum install -y "$dep"
         elif command -v brew &> /dev/null; then
             brew install "$dep"
         else
@@ -40,7 +51,7 @@ for dep in "${DEPENDENCIAS[@]}"; do
     fi
 done
 
-# 2. Descargar el script principal desde GitHub
+# 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
 curl -sSL "$URL_RAW" -o "$DESTINO"
 
@@ -52,21 +63,26 @@ else
     exit 1
 fi
 
-# 3. Asignar permisos de ejecución
+# Ajustar permisos del script descargado para el usuario real
 chmod +x "$DESTINO"
+chown "$REAL_USER" "$DESTINO" 2>/dev/null
 
-# 4. Detectar el archivo de configuración de la Shell (Zsh o Bash)
+# 4. Detectar el archivo de configuración (.zshrc o .bashrc) del usuario real
 echo -e "\n3. Configurando el alias..."
 
-IF_ZSH=$(echo "$SHELL" | grep -i "zsh")
+# Obtener la shell configurada para el usuario real
+USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
 
-if [ -n "$IF_ZSH" ] || [ -f "$HOME/.zshrc" ]; then
-    RC_FILE="$HOME/.zshrc"
+if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
+    RC_FILE="$REAL_HOME/.zshrc"
 else
-    RC_FILE="$HOME/.bashrc"
+    RC_FILE="$REAL_HOME/.bashrc"
 fi
 
 ALIAS_LINE="alias k3smanager='source $DESTINO'"
+
+# Si el archivo no existe, lo crea
+touch "$RC_FILE"
 
 # Si existía un alias previo sobre k3smanager en el archivo detectado, lo limpiamos
 if grep -q "alias k3smanager=" "$RC_FILE" 2>/dev/null; then
@@ -76,11 +92,15 @@ fi
 echo "" >> "$RC_FILE"
 echo "# Alias K3s Manager" >> "$RC_FILE"
 echo "$ALIAS_LINE" >> "$RC_FILE"
+
+# Ajustar propietarios del archivo de configuración editado
+chown "$REAL_USER" "$RC_FILE" 2>/dev/null
+
 echo "   [OK] Alias 'k3smanager' configurado en $RC_FILE"
 
 echo -e "\n=================================================="
 echo " ¡Instalación completada con éxito!"
-echo " Para aplicar los cambios inmediatamente ejecuta:"
+echo " Para aplicar los cambios inmediatamente ejecuta en tu consola de usuario:"
 echo "   source $RC_FILE"
 echo ""
 echo " Luego simplemente escribe: k3smanager"
