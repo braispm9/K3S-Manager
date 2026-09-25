@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- CONFIGURACIÓN DE TU REPOSITORIO ---
+# --- CONFIGURACIÓN DEL REPOSITORIO ---
 GITHUB_USER="braispm9"
 REPO_NAME="K3S-Manager"
 BRANCH="main"
@@ -9,13 +9,13 @@ SCRIPT_NAME="k3smanager.sh"
 # URL directa para descargar el archivo raw desde GitHub
 URL_RAW="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
 
-# Guarda el script en la carpeta actual donde ejecutas el instalador
+# Guardado el script en la carpeta actual donde se ejecuta el instalador
 DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
 DESTINO="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
 
-echo "=================================================="
-echo " Instalador Automático de K3s Manager (Bash/Zsh)"
-echo "=================================================="
+echo "====================================="
+echo " Instalador de K3s Manager (Bash/Zsh)"
+echo "====================================="
 
 # 1. Detectar el usuario real (si se ejecuta con sudo) y su directorio HOME
 if [ -n "$SUDO_USER" ]; then
