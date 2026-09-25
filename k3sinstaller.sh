@@ -32,11 +32,12 @@ DEPENDENCIAS=("curl" "fzf")
 if command -v kubectl &>/dev/null; then
     echo "[OK] Kubernetes"
 else
-      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
-      echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-      sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
+    echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 fi
+
 for dep in "${DEPENDENCIAS[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
         echo "   [!] '$dep' no está instalado. Intentando instalar..."
@@ -57,9 +58,10 @@ done
 
 # 3. Descargar el script principal desde GitHub
 echo -e "\n2. Descargando el script desde GitHub..."
-curl -sSL \
-    -o "k3smanager.sh" \
-    "https://raw.githubusercontent.com/braispm9/K3S-Manager/main/k3smanager.sh"
+
+RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+
+curl -fsSL -o "$DESTINO" "$RAW_URL"
 
 if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
     echo "   [OK] Script descargado correctamente en: $DESTINO"
