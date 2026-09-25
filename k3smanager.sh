@@ -339,7 +339,7 @@ while true; do
     ARGUMENTOS=("${INPUT[@]:1}")
 
     case $ACCION in
-        pods|list)
+        list)
             FLAG="-A"
             if [ -n "$SUBACCION" ] && [ "$SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ]; then
                 FLAG="-n $SUBACCION"
@@ -358,7 +358,7 @@ while true; do
             fi
             ;;
 
-        add|select)
+        select)
             if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
@@ -372,7 +372,7 @@ while true; do
             fi
             ;;
 
-        remove|deselect)
+        deselect)
             if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
@@ -488,6 +488,7 @@ while true; do
                 kubectl run "$NOMBRE_POD" --image="$IMAGEN_POD"
             fi
             ;;
+            
         version)
             echo "Está es la versión 1.3"
             comprobar_actualizacion()
