@@ -75,6 +75,31 @@ else
     echo "    • K3s ya está instalado en este nodo."
 fi
 
+# --- CONFIGURACIÓN DE RED Y KERNEL PARA COMUNICACIÓN ENTRE PODS ---
+echo -e "\n[i] Configurando reenvío de IP y reglas de red/firewall para K3s..."
+# Habilitar IP Forwarding en el Kernel
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+if ! grep -q "net.ipv4.ip_forward" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+else
+    sed -i 's/#*net.ipv4.ip_forward=.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+fi
+sysctl -p /etc/sysctl.conf >/dev/null 2>&1
+
+# Ajustes específicos de Firewall según la distribución detectada
+if command -v firewall-cmd &> /dev/null && systemctl is-active --quiet firewalld; then
+    echo "    • Configurando firewalld (Fedora/RHEL) para permitir interfaces de contenedores..."
+    firewall-cmd --permanent --add-interface=cni0 >/dev/null 2>&1
+    firewall-cmd --permanent --add-interface=flannel.1 >/dev/null 2>&1
+    firewall-cmd --permanent --zone=trusted --add-interface=cni0 >/dev/null 2>&1
+    firewall-cmd --permanent --zone=trusted --add-interface=flannel.1 >/dev/null 2>&1
+    firewall-cmd --reload >/dev/null 2>&1
+elif command -v ufw &> /dev/null && ufw status | grep -q "Status: active"; then
+    echo "    • Ajustando política de reenvío en UFW (Debian/Ubuntu)..."
+    sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw 2>/dev/null
+    ufw reload >/dev/null 2>&1
+fi
+
 # --- CONFIGURACIÓN ROBUSTA DE PERMISOS Y KUBECONFIG PARA USUARIO NORMAL ---
 echo -e "\n[i] Configurando acceso sin sudo a Kubernetes para el usuario $REAL_USER..."
 if [ -f /etc/rancher/k3s/k3s.yaml ]; then
