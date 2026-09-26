@@ -5,14 +5,23 @@ GITHUB_USER="braispm9"
 REPO_NAME="K3S-Manager"
 BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
+GUI_SCRIPT_NAME="k3smanager-gui.py"
 
-# Guardado el script en la carpeta actual donde se ejecuta el instalador
+# Guardado de los scripts en la carpeta actual donde se ejecuta el instalador
 DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
-DESTINO="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
+DESTINO_CLI="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
+DESTINO_GUI="${DIRECTORIO_ACTUAL}/${GUI_SCRIPT_NAME}"
 
-echo "====================================="
-echo " Instalador de K3s Manager (Bash/Zsh)"
-echo "====================================="
+echo "====================================================="
+echo " Instalador de K3s Manager (CLI & Interfaz Gráfica)"
+echo "====================================================="
+
+# 0. Verificar que se ejecute como root o con sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "   [X] Error crítico: Este script debe ejecutarse obligatoriamente como root o utilizando sudo."
+    echo "       Prueba ejecutando: sudo ./k3sinstaller.sh"
+    exit 1
+fi
 
 # 1. Detectar el usuario real (si se ejecuta con sudo) y su directorio HOME
 if [ -n "$SUDO_USER" ]; then
@@ -25,10 +34,10 @@ fi
 
 echo "Instalando para el usuario: $REAL_USER ($REAL_HOME)"
 
-# 2. Comprobar e instalar dependencias básicas del sistema
+# 2. Comprobar e instalar dependencias básicas del sistema (incluyendo Python y Tkinter)
 echo -e "\n1. Verificando dependencias del sistema..."
 
-DEPENDENCIAS=("curl" "fzf")
+DEPENDENCIAS=("curl" "fzf" "python3" "python3-tk")
 if command -v kubectl &>/dev/null; then
     echo "[OK] Kubernetes"
 else
@@ -42,7 +51,7 @@ for dep in "${DEPENDENCIAS[@]}"; do
     if ! command -v "$dep" &> /dev/null; then
         echo "   [!] '$dep' no está instalado. Intentando instalar..."
         if command -v apt &> /dev/null; then
-            apt update && apt install -y "$dep"
+            apt update && apt install -y "$dep" || apt install -y python3-tk
         elif command -v yum &> /dev/null; then
             yum install -y "$dep"
         elif command -v brew &> /dev/null; then
@@ -56,28 +65,36 @@ for dep in "${DEPENDENCIAS[@]}"; do
     fi
 done
 
-# 3. Descargar el script principal desde GitHub
-echo -e "\n2. Descargando el script desde GitHub..."
-RAW_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+# 3. Descargar los scripts principales (CLI y GUI) desde GitHub
+echo -e "\n2. Descargando scripts desde GitHub..."
+RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
 
-curl -fsSL -o "$DESTINO" "$RAW_URL"
+curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
+curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
 
-if [ $? -eq 0 ] && [ -s "$DESTINO" ]; then
-    echo "   [OK] Script descargado correctamente en: $DESTINO"
+if [ $? -eq 0 ] && [ -s "$DESTINO_CLI" ]; then
+    echo "   [OK] Script CLI descargado correctamente en: $DESTINO_CLI"
 else
-    echo "   [X] Error al descargar el script desde GitHub. Revisa la URL y la configuración del repositorio."
-    rm -f "$DESTINO"
+    echo "   [X] Error al descargar el script CLI desde GitHub."
+    rm -f "$DESTINO_CLI"
     exit 1
 fi
 
-# Ajustar permisos del script descargado para el usuario real
-chmod +x "$DESTINO"
-chown "$REAL_USER" "$DESTINO" 2>/dev/null
+if [ -s "$DESTINO_GUI" ]; then
+    echo "   [OK] Script GUI descargado correctamente en: $DESTINO_GUI"
+else
+    echo "   [!] Advertencia: No se pudo descargar la interfaz gráfica (GUI) o no existe aún en el repositorio con ese nombre."
+fi
+
+# Ajustar permisos de los scripts descargados
+chmod +x "$DESTINO_CLI"
+chmod +x "$DESTINO_GUI" 2>/dev/null
+chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI" "$DESTINO_GUI" 2>/dev/null
 
 # 4. Detectar el archivo de configuración (.zshrc o .bashrc) del usuario real
-echo -e "\n3. Configurando el alias..."
+echo -e "\n3. Configurando los alias..."
 
-# Obtener la shell configurada para el usuario real
 USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
 
 if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
@@ -86,24 +103,28 @@ else
     RC_FILE="$REAL_HOME/.bashrc"
 fi
 
-ALIAS_LINE="alias k3smanager='source $DESTINO'"
+# Definir los alias: modo CLI y modo Gráfico Independiente con disown
+ALIAS_CLI="alias k3smanager='source $DESTINO_CLI'"
+ALIAS_GUI="alias k3smanager-gui='python3 \"$DESTINO_GUI\" >/dev/null 2>&1 & disown'"
 
-# Si el archivo no existe, lo crea
 touch "$RC_FILE"
 
-# Si existía un alias previo sobre k3smanager en el archivo detectado, lo limpiamos
+# Limpiar alias previos si existían para evitar duplicados
 if grep -q "alias k3smanager=" "$RC_FILE" 2>/dev/null; then
     sed -i.bak '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null || sed -i '' '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null
 fi
+if grep -q "alias k3smanager-gui=" "$RC_FILE" 2>/dev/null; then
+    sed -i.bak '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null || sed -i '' '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null
+fi
 
 echo "" >> "$RC_FILE"
-echo "# Alias K3s Manager" >> "$RC_FILE"
-echo "$ALIAS_LINE" >> "$RC_FILE"
+echo "# Aliases K3s Manager" >> "$RC_FILE"
+echo "$ALIAS_CLI" >> "$RC_FILE"
+echo "$ALIAS_GUI" >> "$RC_FILE"
 
-# Ajustar propietarios del archivo de configuración editado
 chown "$REAL_USER" "$RC_FILE" 2>/dev/null
 
-# Cargar k3s como última dependencia
+# Cargar k3s como última dependencia si no está presente
 if command -v k3s &>/dev/null; then
     echo "[OK] K3S"
 else
@@ -112,12 +133,14 @@ else
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fi
 
-echo "   [OK] Alias 'k3smanager' configurado en $RC_FILE"
+echo "   [OK] Comandos configurados correctamente en $RC_FILE"
 
 echo -e "\n=================================================="
 echo " ¡Instalación completada con éxito!"
-echo " Para aplicar los cambios inmediatamente ejecuta en tu consola de usuario:"
+echo " Para aplicar los cambios inmediatamente ejecuta en tu consola:"
 echo "   source $RC_FILE"
 echo ""
-echo " Luego simplemente escribe: k3smanager"
+echo " Comandos disponibles:"
+echo "   • k3smanager     -> Ejecuta la versión de consola interactiva"
+echo "   • k3smanager-gui -> Abre la interfaz gráfica independiente"
 echo "=================================================="
