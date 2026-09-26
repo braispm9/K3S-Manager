@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="Release 2.8"
+VERSION="Release 3.2"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -26,10 +26,11 @@ mostrar_ayuda() {
         echo "  delete                     - Eliminar el/los pod(s) seleccionados"
         echo "  create <N|N-M> [-i imagen] - Crea pod individual o rango con imagen opcional"
         echo ""
-        echo "Pruebas de Red y Control de Puertos:"
+        echo "Pruebas de Red, Control de Puertos y Auditoría:"
         echo "  check-ports [ID | N-M]     - Escanea los puertos abiertos de pods seleccionados o por ID/rango"
-        echo "  close-port <ID|N-M> [puerto]- Bloquea el tráfico de red de un pod por NetworkPolicy"
-        echo "  open-port <ID|N-M>         - Restablece el tráfico de red eliminado la NetworkPolicy"
+        echo "  close-port <ID|N-M>        - Bloquea el tráfico de red de un pod por NetworkPolicy"
+        echo "  open-port <ID|N-M>         - Restablece el tráfico de red eliminando la NetworkPolicy"
+        echo "  monitor-connect            - Monitoriza accesos a TODOS los puertos abiertos en monitor_connect.log"
         echo "  test-network [N | N-M |-a] - Crear y probar conectividad hacia pods específicos o todos"
         echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods por su ID"
         echo ""
@@ -52,18 +53,17 @@ mostrar_ayuda() {
         close-port)
             echo -e "\nUSO: close-port <ID | N-M>"
             echo "Aplica una NetworkPolicy para aislar y bloquear el tráfico entrante al pod especificado."
-            echo "Ejemplos:"
-            echo "  close-port 1"
-            echo "  close-port 1-5"
-            echo ""
             ;;
         open-port)
             echo -e "\nUSO: open-port <ID | N-M>"
             echo "Elimina el aislamiento por NetworkPolicy del pod, volviendo a permitir la comunicación."
-            echo "Ejemplos:"
-            echo "  open-port 1"
-            echo "  open-port 1-5"
-            echo ""
+            ;;
+        monitor-connect)
+            echo -e "\nUSO: monitor-connect"
+            echo "Detecta dinámicamente todos los puertos TCP en escucha (LISTEN) en la máquina host."
+            echo "Captura en tiempo real todos los intentos de conexión TCP (SYN) entrantes."
+            echo "Omite automáticamente el tráfico de loopback (127.0.0.1) y la subred K3s (10.42.0.0/16)."
+            echo "Guarda la actividad con marca de tiempo e IP formateada en 'monitor_connect.log'."
             ;;
         ip)
             echo -e "\nUSO: ip <ID_numérico | nombre_pod> [namespace]"
@@ -120,14 +120,14 @@ comprobar_actualizacion() {
         rm -f "$TEMP_REMOTE"
 
         if [ -n "$HASH_LOCAL" ] && [ "$HASH_LOCAL" = "$HASH_REMOTO" ]; then
-            echo "  [OK] Estás utilizando la última versión disponible."
+            echo "   [OK] Estás utilizando la última versión disponible."
         else
-            echo "  [!] Hay una nueva versión disponible en GitHub."
-            echo "      Ejecuta 'update' para actualizar el script."
+            echo "   [!] Hay una nueva versión disponible en GitHub."
+            echo "       Ejecuta 'update' para actualizar el script."
         fi
     else
         rm -f "$TEMP_REMOTE"
-        echo "  [X] No se pudo conectar con GitHub para verificar la versión."
+        echo "   [X] No se pudo conectar con GitHub para verificar la versión."
     fi
 }
 
@@ -171,7 +171,6 @@ actualizar_k3smanager() {
     fi
 }
 
-# Construcción de la matriz global indexada numéricamente (1..N)
 actualizar_pods() {
     PODS_LIST=()
     PODS_NS_LIST=()
@@ -213,7 +212,7 @@ listar_pods_pantalla() {
     fi
 
     local contador_impresos=0
-    echo -e "\nID   NAMESPACE         NOMBRE DEL POD"
+    echo -e "\nID   NAMESPACE        NOMBRE DEL POD"
     echo "--------------------------------------------------"
 
     for i in "${!PODS_LIST[@]}"; do
@@ -400,10 +399,8 @@ cerrar_puerto_pod() {
         local ns="${target_ns[$i]}"
         local netpol_name="block-ingress-${pod}"
 
-        # Etiquetar el pod objetivo para poder emparejarlo con la NetworkPolicy
         kubectl label pod "$pod" -n "$ns" "k3smanager-isolated=true" --overwrite >/dev/null 2>&1
 
-        # Crear manifest de aislamiento (Deny All Ingress para el pod objetivo)
         cat <<EOF | kubectl apply -f - >/dev/null 2>&1
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -468,6 +465,61 @@ abrir_puerto_pod() {
         kubectl label pod "$pod" -n "$ns" "k3smanager-isolated-" >/dev/null 2>&1
 
         echo -e "\033[1;32m[OK]\033[0m Bloqueo removido. Tráfico reactivado en '\033[1;36m$pod\033[0m' (NS: $ns)."
+    done
+}
+
+# --- AUDITORÍA DE CONEXIONES EN PUERTOS ABIERTOS ---
+
+monitorizar_conexiones() {
+    local log_file="monitor_connect.log"
+
+    if ! command -v tcpdump &> /dev/null; then
+        echo -e "\033[1;31m[X] Error: 'tcpdump' no está instalado en el sistema.\033[0m"
+        echo "Instálalo ejecutando: sudo apt update && sudo apt install -y tcpdump"
+        return 1
+    fi
+
+    echo -e "\n\033[1;36m[+] Escaneando puertos abiertos en el sistema host...\033[0m"
+
+    local open_ports=()
+    if command -v ss &> /dev/null; then
+        open_ports=($(ss -tuln | awk '{print $5}' | grep -oE '[0-9]+$' | sort -u))
+    elif command -v netstat &> /dev/null; then
+        open_ports=($(netstat -tuln | awk '{print $4}' | grep -oE '[0-9]+$' | sort -u))
+    fi
+
+    if [ ${#open_ports[@]} -eq 0 ]; then
+        echo -e "\033[1;33m[!] No se detectaron puertos en LISTEN. Se aplicará captura general TCP.\033[0m"
+        filter_ports="tcp"
+    else
+        echo -e "\033[1;32m[OK] Puertos abiertos detectados:\033[0m ${open_ports[*]}"
+        local ports_str=""
+        for p in "${open_ports[@]}"; do
+            ports_str="${ports_str}port $p or "
+        done
+        filter_ports="tcp and (${ports_str% or })"
+    fi
+
+    echo -e "\n\033[1;36m[+] Monitorizando intentos de acceso SYN a puertos abiertos...\033[0m"
+    echo -e "Filtro activo: Excluyendo subred K3s (10.42.0.0/16) y localhost (127.0.0.1)"
+    echo -e "Registrando eventos en '\033[1;33m$log_file\033[0m'."
+    echo -e "Presiona \033[1;31mCtrl+C\033[0m para salir del modo auditoría.\n"
+
+    # Captura mejorada con exclusión nativa de red interna/Pods y localhost
+    sudo tcpdump -i any -n -e -l "tcp[tcpflags] & tcp-syn != 0 and ($filter_ports) and not src net 10.42.0.0/16 and not src 127.0.0.1" 2>/dev/null | \
+    while read -r line; do
+        local ips=($(echo "$line" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}\.[0-9]+'))
+
+        if [ ${#ips[@]} -ge 2 ]; then
+            ip_origen="${ips[0]%.*}"
+            puerto_destino="${ips[1]##*.}"
+
+            timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+            registro="[$timestamp] IP Origen: $ip_origen | Puerto Destino: $puerto_destino"
+
+            echo -e "\033[1;32m[CONEXIÓN DETECTADA]\033[0m $registro"
+            echo "$registro" >> "$log_file"
+        fi
     done
 }
 
@@ -739,6 +791,10 @@ while true; do
             abrir_puerto_pod "$SUBACCION"
             ;;
 
+        monitor-connect)
+            monitorizar_conexiones
+            ;;
+
         ip|get-ip)
             obtener_ip_pod "$SUBACCION" "${INPUT[2]}"
             ;;
@@ -820,72 +876,51 @@ while true; do
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "Error: No hay pods seleccionados."
             elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
-                echo "Error: Selecciona solo 1 pod para ver sus logs."
+                echo "Error: Selecciona únicamente 1 pod para ver sus logs."
             else
-                kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}"
+                kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}" --tail=50
             fi
             ;;
 
         delete)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
-                echo "Error: No hay pods seleccionados."
+                echo "Error: No hay pods seleccionados para eliminar."
             else
-                for i in "${!SELECCIONADOS_PODS[@]}"; do
-                    echo "Eliminando pod '${SELECCIONADOS_PODS[$i]}'..."
-                    kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}"
-                done
-                SELECCIONADOS_PODS=()
-                SELECCIONADOS_NAMESPACES=()
+                read -e -p "¿Estás seguro de que deseas eliminar ${#SELECCIONADOS_PODS[@]} pod(s)? (s/n): " confirm
+                if [[ "$confirm" =~ ^[sS]$ ]]; then
+                    for i in "${!SELECCIONADOS_PODS[@]}"; do
+                        kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}"
+                    done
+                    SELECCIONADOS_PODS=()
+                    SELECCIONADOS_NAMESPACES=()
+                    actualizar_pods
+                fi
             fi
             ;;
 
         create)
-            PARAM="${INPUT[1]}"
-            IMAGEN_POD="nginx:alpine"
-            INICIO=0
-            FIN=0
-
-            for ((j=1; j<${#INPUT[@]}; j++)); do
-                if [ "${INPUT[$j]}" == "--image" ] || [ "${INPUT[$j]}" == "-i" ]; then
-                    SIG_IDX=$((j + 1))
-                    if [ -n "${INPUT[$SIG_IDX]}" ]; then
-                        IMAGEN_POD="${INPUT[$SIG_IDX]}"
-                    fi
-                    break
-                fi
-            done
-
-            if [[ "$PARAM" =~ ^[0-9]+$ ]]; then
-                INICIO=$PARAM
-                FIN=$PARAM
-            elif [[ "$PARAM" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                INICIO="${BASH_REMATCH[1]}"
-                FIN="${BASH_REMATCH[2]}"
-            fi
-
-            if [ "$INICIO" -ge 1 ] && [ "$FIN" -le 50 ] && [ "$INICIO" -le "$FIN" ]; then
-                if [ "$INICIO" -eq "$FIN" ]; then
-                    echo "Creando pod-prueba-$INICIO con la imagen '$IMAGEN_POD'..."
-                else
-                    echo "Creando pods de prueba del $INICIO al $FIN con la imagen '$IMAGEN_POD'..."
-                fi
-
-                for ((i=INICIO; i<=FIN; i++)); do
-                    if ! kubectl get pod "pod-prueba-$i" -A >/dev/null 2>&1; then
-                        kubectl run "pod-prueba-$i" --image="$IMAGEN_POD" >/dev/null 2>&1
-                        echo "Pod 'pod-prueba-$i' creado ($IMAGEN_POD)."
-                    else
-                        echo "Pod 'pod-prueba-$i' ya existe."
-                    fi
-                done
-                actualizar_pods
+            if [ -z "$SUBACCION" ]; then
+                echo "Error: Indica cuántos pods crear o un rango. Ejemplos: create 5, create 1-10"
             else
-                echo "Error: Especifica un pod (1-50) o un rango válido (ej: 1-50, 5-10)."
-                echo "Ejemplos:"
-                echo "  create 1"
-                echo "  create 1-50"
-                echo "  create 1 --image redis:alpine"
-                echo "  create 1-10 -i ubuntu"
+                imagen="nginx:alpine"
+                if [ "${INPUT[2]}" == "-i" ] || [ "${INPUT[2]}" == "--image" ]; then
+                    [ -n "${INPUT[3]}" ] && imagen="${INPUT[3]}"
+                fi
+
+                if [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
+                    for ((c=1; c<=SUBACCION; c++)); do
+                        kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                    done
+                    echo "Creados $SUBACCION pods con la imagen '$imagen'."
+                elif [[ "$SUBACCION" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                    i_c="${BASH_REMATCH[1]}"
+                    f_c="${BASH_REMATCH[2]}"
+                    for ((c=i_c; c<=f_c; c++)); do
+                        kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                    done
+                    echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
+                fi
+                actualizar_pods
             fi
             ;;
 
@@ -897,37 +932,31 @@ while true; do
             probar_conexion_entre_pods "$SUBACCION" "${INPUT[2]}"
             ;;
 
+        version)
+            echo "K3s Manager versión: $VERSION"
+            comprobar_actualizacion
+            ;;
+
+        update)
+            actualizar_k3smanager
+            if [ $? -eq 0 ]; then
+                echo "Reiniciando el script..."
+                export REINICIANDO_K3SMANAGER=true
+                exec "$0" "$@"
+            fi
+            ;;
+
         help)
             mostrar_ayuda "$SUBACCION"
             ;;
 
         exit|quit)
-            echo "Saliendo de la consola K3s..."
-            break
-            ;;
-
-        update)
-            if actualizar_k3smanager; then
-                echo -e "\nRecargando K3s Manager...\n"
-                sleep 1
-
-                export PROMPT="k3s> "
-
-                if [ -n "$RUTA_DESTINO" ] && [ -f "$RUTA_DESTINO" ]; then
-                    source "$RUTA_DESTINO"
-                fi
-
-                break
-            fi
-            ;;
-
-        version)
-            echo "Esta es la versión: $VERSION"
-            comprobar_actualizacion
+            echo "Saliendo de K3s Manager. ¡Hasta luego!"
+            exit 0
             ;;
 
         *)
-            echo "Comando no reconocido: '$COMANDO'. Escribe 'help' para ayuda."
+            echo "Comando no reconocido: '$COMANDO'. Escribe 'help' para ver los comandos disponibles."
             ;;
     esac
 done
