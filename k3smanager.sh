@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="Release 2.3"
+VERSION="Release 2.8"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -12,8 +12,8 @@ mostrar_ayuda() {
 
     if [ -z "$cmd" ]; then
         echo -e "\nComandos disponibles para Pods:"
-        echo "  pods [namespace|-A]        - Listar pods excluyendo kube-system con su ID numérico"
-        echo "  add pod <IDs...>           - Añadir pod(s) a la selección activa (ej: add pod 1 10)"
+        echo "  pods [ID|N-M|namespace|-A] - Listar pods con ID estricto (ej: pods, pods 1, pods 1-50)"
+        echo "  add pod <IDs...>           - Añadir pod(s) por su ID numérico asignado (ej: add pod 1 10)"
         echo "  remove pod <IDs...>        - Quitar pod(s) de la selección activa (ej: remove pod 1)"
         echo "  clear-sel                  - Limpiar toda la selección de pods actual"
         echo "  clear                      - Limpiar la pantalla de la terminal"
@@ -26,9 +26,12 @@ mostrar_ayuda() {
         echo "  delete                     - Eliminar el/los pod(s) seleccionados"
         echo "  create <N|N-M> [-i imagen] - Crea pod individual o rango con imagen opcional"
         echo ""
-        echo "Pruebas de Red y Diagnóstico:"
+        echo "Pruebas de Red y Control de Puertos:"
+        echo "  check-ports [ID | N-M]     - Escanea los puertos abiertos de pods seleccionados o por ID/rango"
+        echo "  close-port <ID|N-M> [puerto]- Bloquea el tráfico de red de un pod por NetworkPolicy"
+        echo "  open-port <ID|N-M>         - Restablece el tráfico de red eliminado la NetworkPolicy"
         echo "  test-network [N | N-M |-a] - Crear y probar conectividad hacia pods específicos o todos"
-        echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods"
+        echo "  test-connections [orig dest] - Probar tráfico directo entre dos pods por su ID"
         echo ""
         echo "  version                    - Verifica si es la última versión y muestra la versión actual"
         echo "  update                     - Instala la última versión del software y se reactiva"
@@ -39,54 +42,52 @@ mostrar_ayuda() {
 
     case $cmd in
         pods|list)
-            echo -e "\nUSO: pods [namespace|-A]"
-            echo "Muestra los pods disponibles (ignorando el namespace kube-system) asignando IDs ordenados."
+            echo -e "\nUSO: pods [ID | N-M | namespace | -n namespace | -A]"
+            echo "Muestra los pods disponibles asignando un ID numérico único correlativo (1, 2, 3...)."
+            ;;
+        check-ports)
+            echo -e "\nUSO: check-ports [ID | N-M]"
+            echo "Escanea y muestra los puertos abiertos en los pods indicados o seleccionados."
+            ;;
+        close-port)
+            echo -e "\nUSO: close-port <ID | N-M>"
+            echo "Aplica una NetworkPolicy para aislar y bloquear el tráfico entrante al pod especificado."
+            echo "Ejemplos:"
+            echo "  close-port 1"
+            echo "  close-port 1-5"
+            echo ""
+            ;;
+        open-port)
+            echo -e "\nUSO: open-port <ID | N-M>"
+            echo "Elimina el aislamiento por NetworkPolicy del pod, volviendo a permitir la comunicación."
+            echo "Ejemplos:"
+            echo "  open-port 1"
+            echo "  open-port 1-5"
             echo ""
             ;;
         ip)
             echo -e "\nUSO: ip <ID_numérico | nombre_pod> [namespace]"
-            echo "Muestra la dirección IP interna asignada al pod en el clúster."
-            echo "Ejemplos:"
-            echo "  ip 3"
-            echo "  ip pod-prueba-1"
-            echo "  ip \"pod-prueba-1\" default"
-            echo ""
+            echo "Muestra la dirección IP asignada al pod mediante su ID numérico."
             ;;
         create)
             echo -e "\nUSO: create <N | N-M> [--image <imagen> | -i <imagen>]"
-            echo "Crea pods de prueba individuales o por rango. Si no se especifica imagen, usa 'nginx:alpine'."
-            echo "Ejemplos:"
-            echo "  create 1                            -> Crea pod-prueba-1 con nginx:alpine"
-            echo "  create 1-50                         -> Crea de pod-prueba-1 a 50 con nginx:alpine"
-            echo "  create 5 --image redis:alpine       -> Crea pod-prueba-5 con redis:alpine"
-            echo "  create 1-10 -i ubuntu               -> Crea de pod-prueba-1 a 10 con ubuntu"
-            echo ""
+            echo "Crea pods de prueba individuales o por rango."
             ;;
         describe)
             echo -e "\nUSO: describe [-l]"
-            echo "Muestra la información de los pods seleccionados."
-            echo "  describe   -> Vista resumida (Estado, IP, Nodo, Restarts, Eventos)."
-            echo "  describe -l  -> Vista completa detallada (kubectl describe)."
-            echo ""
+            echo "Muestra la información de los pods seleccionados mediante sus IDs."
             ;;
         test-network)
             echo -e "\nUSO: test-network [N | N-M | -a | --all]"
-            echo "Crea automáticamente los pods del rango especificado si no existen y mide su conectividad."
-            echo "Ejemplos:"
-            echo "  test-network 1-2    -> Crea y prueba solo pod-prueba-1 y pod-prueba-2"
-            echo "  test-network 5      -> Crea y prueba solo hasta pod-prueba-5"
-            echo "  test-network -a     -> Prueba todos los 50 pods"
-            echo ""
+            echo "Crea y mide conectividad hacia los pods especificados por su número (1 al 50)."
             ;;
         test-connections)
             echo -e "\nUSO: test-connections [ID_ORIGEN] [ID_DESTINO]"
-            echo "Realiza una petición HTTP (curl) directa entre dos pods especificados por su ID."
-            echo ""
+            echo "Realiza una petición HTTP entre dos pods identificados por sus IDs numéricos."
             ;;
         clear)
             echo -e "\nUSO: clear"
             echo "Limpia la pantalla de la terminal."
-            echo ""
             ;;
         *)
             echo -e "\nNo hay información detallada sobre '$cmd'. Escribe 'help' para ver la lista.\n"
@@ -170,18 +171,78 @@ actualizar_k3smanager() {
     fi
 }
 
+# Construcción de la matriz global indexada numéricamente (1..N)
 actualizar_pods() {
-    local ns_flag="${1:---all-namespaces}"
     PODS_LIST=()
     PODS_NS_LIST=()
 
-    # Ordenación natural (-V) ignorando el namespace kube-system
     while read -r ns name; do
         if [ -n "$name" ] && [ "$ns" != "kube-system" ]; then
             PODS_NS_LIST+=("$ns")
             PODS_LIST+=("$name")
         fi
-    done < <(kubectl get pods $ns_flag --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | sort -k2 -V)
+    done < <(kubectl get pods --all-namespaces --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | sort -k2 -V)
+}
+
+listar_pods_pantalla() {
+    local arg1="$1"
+    local arg2="$2"
+    local ns_filtro=""
+    local inicio=0
+    local fin=0
+
+    actualizar_pods
+
+    if [ ${#PODS_LIST[@]} -eq 0 ]; then
+        echo "No se encontraron pods de aplicación disponibles."
+        return
+    fi
+
+    if [[ "$arg1" =~ ^[0-9]+$ ]]; then
+        inicio=$arg1
+        fin=$arg1
+    elif [[ "$arg1" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        inicio="${BASH_REMATCH[1]}"
+        fin="${BASH_REMATCH[2]}"
+    elif [ "$arg1" == "-A" ] || [ "$arg1" == "--all-namespaces" ]; then
+        ns_filtro=""
+    elif [ "$arg1" == "-n" ]; then
+        ns_filtro="$arg2"
+    else
+        ns_filtro="$arg1"
+    fi
+
+    local contador_impresos=0
+    echo -e "\nID   NAMESPACE         NOMBRE DEL POD"
+    echo "--------------------------------------------------"
+
+    for i in "${!PODS_LIST[@]}"; do
+        local id_actual=$((i + 1))
+        local current_ns="${PODS_NS_LIST[$i]}"
+        local current_pod="${PODS_LIST[$i]}"
+
+        if [ "$inicio" -gt 0 ]; then
+            if [ "$id_actual" -ge "$inicio" ] && [ "$id_actual" -le "$fin" ]; then
+                printf "%-4d %-17s %s\n" "$id_actual" "$current_ns" "$current_pod"
+                contador_impresos=$((contador_impresos + 1))
+            fi
+        else
+            if [ -z "$ns_filtro" ] || [ "$current_ns" == "$ns_filtro" ]; then
+                printf "%-4d %-17s %s\n" "$id_actual" "$current_ns" "$current_pod"
+                contador_impresos=$((contador_impresos + 1))
+            fi
+        fi
+    done
+
+    if [ $contador_impresos -eq 0 ]; then
+        if [ "$inicio" -gt 0 ]; then
+            echo "No se encontraron pods en el rango especificado ($inicio - $fin)."
+        else
+            echo "No se encontraron pods en el namespace '$ns_filtro'."
+        fi
+    else
+        echo ""
+    fi
 }
 
 obtener_pods_por_indice() {
@@ -189,13 +250,15 @@ obtener_pods_por_indice() {
     PODS_TEMPORALES=()
     NS_TEMPORALES=()
 
+    actualizar_pods
+
     for id in "${ids[@]}"; do
         if [[ "$id" =~ ^[0-9]+$ ]] && [ "$id" -ge 1 ] && [ "$id" -le "${#PODS_LIST[@]}" ]; then
             idx=$((id - 1))
             PODS_TEMPORALES+=("${PODS_LIST[$idx]}")
             NS_TEMPORALES+=("${PODS_NS_LIST[$idx]}")
         else
-            echo "Error: El ID '$id' no es válido. Ejecuta 'pods' para refrescar la lista."
+            echo "Error: El ID '$id' no es válido. Revisa los IDs con el comando 'pods'."
             return 1
         fi
     done
@@ -210,7 +273,7 @@ obtener_ip_pod() {
         return 1
     fi
 
-    actualizar_pods "-A"
+    actualizar_pods
 
     local pod_nombre=""
     local pod_ns=""
@@ -221,7 +284,7 @@ obtener_ip_pod() {
             pod_nombre="${PODS_LIST[$idx]}"
             pod_ns="${PODS_NS_LIST[$idx]}"
         else
-            echo "Error: El ID '$target' no existe. Ejecuta 'pods' para ver la lista activa."
+            echo "Error: El ID '$target' no existe en la lista general."
             return 1
         fi
     else
@@ -235,7 +298,7 @@ obtener_ip_pod() {
     fi
 
     if [ -z "$pod_ns" ]; then
-        echo "Error: No se encontró el pod '$pod_nombre' en ningún namespace."
+        echo "Error: No se encontró el pod '$pod_nombre'."
         return 1
     fi
 
@@ -243,15 +306,14 @@ obtener_ip_pod() {
     local status=$(kubectl get pod "$pod_nombre" -n "$pod_ns" -o jsonpath='{.status.phase}' 2>/dev/null)
 
     if [ -n "$ip" ]; then
-        echo -e "IP de '$pod_nombre' (NS: \033[1;34m${pod_ns}\033[0m | Estado: \033[1;33m${status}\033[0m): \033[1;32m$ip\033[0m"
+        echo -e "IP del Pod ID/Nombre '$target' -> [$pod_nombre] (NS: \033[1;34m${pod_ns}\033[0m | Estado: \033[1;33m${status}\033[0m): \033[1;32m$ip\033[0m"
     else
-        echo "Error: El pod '$pod_nombre' existe en '$pod_ns' (Estado: ${status:-Desconocido}), pero aún no tiene IP asignada."
+        echo "Error: El pod '$pod_nombre' existe en '$pod_ns' (Estado: ${status:-Desconocido}), pero no tiene IP asignada."
         return 1
     fi
 }
 
 añadir_a_seleccion() {
-    actualizar_pods "-A"
     if obtener_pods_por_indice "$@"; then
         for i in "${!PODS_TEMPORALES[@]}"; do
             local pod="${PODS_TEMPORALES[$i]}"
@@ -268,7 +330,7 @@ añadir_a_seleccion() {
             if [ $existe -eq 0 ]; then
                 SELECCIONADOS_PODS+=("$pod")
                 SELECCIONADOS_NAMESPACES+=("$ns")
-                echo "Pod '$pod' (namespace: $ns) añadido a la selección."
+                echo "Pod ID/Nombre '$pod' (namespace: $ns) añadido a la selección."
             else
                 echo "El pod '$pod' ya estaba seleccionado."
             fi
@@ -277,7 +339,6 @@ añadir_a_seleccion() {
 }
 
 quitar_de_seleccion() {
-    actualizar_pods "-A"
     if obtener_pods_por_indice "$@"; then
         for i in "${!PODS_TEMPORALES[@]}"; do
             local pod_quitar="${PODS_TEMPORALES[$i]}"
@@ -297,6 +358,212 @@ quitar_de_seleccion() {
             echo "Pod '$pod_quitar' removido de la selección."
         done
     fi
+}
+
+# --- CONTROL Y BLOQUEO DE PUERTOS/RED ---
+
+cerrar_puerto_pod() {
+    local arg="$1"
+    local target_pods=()
+    local target_ns=()
+
+    actualizar_pods
+
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        if [ "$arg" -ge 1 ] && [ "$arg" -le "${#PODS_LIST[@]}" ]; then
+            local idx=$((arg - 1))
+            target_pods+=("${PODS_LIST[$idx]}")
+            target_ns+=("${PODS_NS_LIST[$idx]}")
+        fi
+    elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        local inicio="${BASH_REMATCH[1]}"
+        local fin="${BASH_REMATCH[2]}"
+        for ((i=inicio; i<=fin; i++)); do
+            if [ "$i" -ge 1 ] && [ "$i" -le "${#PODS_LIST[@]}" ]; then
+                local idx=$((i - 1))
+                target_pods+=("${PODS_LIST[$idx]}")
+                target_ns+=("${PODS_NS_LIST[$idx]}")
+            fi
+        done
+    elif [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
+        target_pods=("${SELECCIONADOS_PODS[@]}")
+        target_ns=("${SELECCIONADOS_NAMESPACES[@]}")
+    fi
+
+    if [ ${#target_pods[@]} -eq 0 ]; then
+        echo "Error: Especifica un ID (ej: close-port 1), un rango (ej: close-port 1-50) o selecciona pods previamente."
+        return 1
+    fi
+
+    for i in "${!target_pods[@]}"; do
+        local pod="${target_pods[$i]}"
+        local ns="${target_ns[$i]}"
+        local netpol_name="block-ingress-${pod}"
+
+        # Etiquetar el pod objetivo para poder emparejarlo con la NetworkPolicy
+        kubectl label pod "$pod" -n "$ns" "k3smanager-isolated=true" --overwrite >/dev/null 2>&1
+
+        # Crear manifest de aislamiento (Deny All Ingress para el pod objetivo)
+        cat <<EOF | kubectl apply -f - >/dev/null 2>&1
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ${netpol_name}
+  namespace: ${ns}
+spec:
+  podSelector:
+    matchLabels:
+      k3smanager-isolated: "true"
+  policyTypes:
+  - Ingress
+EOF
+
+        if [ $? -eq 0 ]; then
+            echo -e "\033[1;32m[OK]\033[0m Aislamiento de red/puertos aplicado exitosamente en '\033[1;36m$pod\033[0m' (NS: $ns)."
+        else
+            echo -e "\033[1;31m[X]\033[0m Error al aplicar la NetworkPolicy en '$pod'."
+        fi
+    done
+}
+
+abrir_puerto_pod() {
+    local arg="$1"
+    local target_pods=()
+    local target_ns=()
+
+    actualizar_pods
+
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        if [ "$arg" -ge 1 ] && [ "$arg" -le "${#PODS_LIST[@]}" ]; then
+            local idx=$((arg - 1))
+            target_pods+=("${PODS_LIST[$idx]}")
+            target_ns+=("${PODS_NS_LIST[$idx]}")
+        fi
+    elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        local inicio="${BASH_REMATCH[1]}"
+        local fin="${BASH_REMATCH[2]}"
+        for ((i=inicio; i<=fin; i++)); do
+            if [ "$i" -ge 1 ] && [ "$i" -le "${#PODS_LIST[@]}" ]; then
+                local idx=$((i - 1))
+                target_pods+=("${PODS_LIST[$idx]}")
+                target_ns+=("${PODS_NS_LIST[$idx]}")
+            fi
+        done
+    elif [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
+        target_pods=("${SELECCIONADOS_PODS[@]}")
+        target_ns=("${SELECCIONADOS_NAMESPACES[@]}")
+    fi
+
+    if [ ${#target_pods[@]} -eq 0 ]; then
+        echo "Error: Especifica un ID (ej: open-port 1), un rango (ej: open-port 1-50) o selecciona pods previamente."
+        return 1
+    fi
+
+    for i in "${!target_pods[@]}"; do
+        local pod="${target_pods[$i]}"
+        local ns="${target_ns[$i]}"
+        local netpol_name="block-ingress-${pod}"
+
+        kubectl delete networkpolicy "$netpol_name" -n "$ns" >/dev/null 2>&1
+        kubectl label pod "$pod" -n "$ns" "k3smanager-isolated-" >/dev/null 2>&1
+
+        echo -e "\033[1;32m[OK]\033[0m Bloqueo removido. Tráfico reactivado en '\033[1;36m$pod\033[0m' (NS: $ns)."
+    done
+}
+
+# --- ESCANEO DE PUERTOS Y SERVICIOS ---
+
+mapear_servicio_puerto() {
+    local port="$1"
+    case "$port" in
+        80|8080|8000) echo "HTTP" ;;
+        443|8443)    echo "HTTPS" ;;
+        6379)        echo "Redis" ;;
+        5432)        echo "PostgreSQL" ;;
+        3306)        echo "MySQL/MariaDB" ;;
+        27017)       echo "MongoDB" ;;
+        53)          echo "DNS" ;;
+        22)          echo "SSH" ;;
+        *)           echo "Desconocido/Custom" ;;
+    esac
+}
+
+escanear_puertos_pod() {
+    local arg="$1"
+    local pods_a_escanear=()
+    local ns_a_escanear=()
+
+    actualizar_pods
+
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        if [ "$arg" -ge 1 ] && [ "$arg" -le "${#PODS_LIST[@]}" ]; then
+            local idx=$((arg - 1))
+            pods_a_escanear+=("${PODS_LIST[$idx]}")
+            ns_a_escanear+=("${PODS_NS_LIST[$idx]}")
+        else
+            echo "Error: El ID '$arg' está fuera del rango de pods existente."
+            return 1
+        fi
+    elif [[ "$arg" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+        local inicio="${BASH_REMATCH[1]}"
+        local fin="${BASH_REMATCH[2]}"
+
+        if [ "$inicio" -lt 1 ] || [ "$fin" -gt 50 ] || [ "$inicio" -gt "$fin" ]; then
+            echo "Error: El rango especificado ($inicio-$fin) debe estar entre 1 y 50."
+            return 1
+        fi
+
+        for ((i=inicio; i<=fin; i++)); do
+            if [ "$i" -le "${#PODS_LIST[@]}" ]; then
+                local idx=$((i - 1))
+                pods_a_escanear+=("${PODS_LIST[$idx]}")
+                ns_a_escanear+=("${PODS_NS_LIST[$idx]}")
+            fi
+        done
+    elif [ ${#SELECCIONADOS_PODS[@]} -gt 0 ]; then
+        pods_a_escanear=("${SELECCIONADOS_PODS[@]}")
+        ns_a_escanear=("${SELECCIONADOS_NAMESPACES[@]}")
+    else
+        echo "Error: Indica un ID (ej: check-ports 1), un rango (ej: check-ports 1-50) o selecciona pods previamente con 'select'."
+        return 1
+    fi
+
+    echo -e "\nIniciando escaneo de puertos en ${#pods_a_escanear[@]} pod(s)...\n"
+
+    local puertos_comunes=(80 443 8080 8000 6379 5432 3306 27017 53 22 8443)
+
+    for i in "${!pods_a_escanear[@]}"; do
+        local pod="${pods_a_escanear[$i]}"
+        local ns="${ns_a_escanear[$i]}"
+
+        local ip=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.status.podIP}' 2>/dev/null)
+        local status=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.status.phase}' 2>/dev/null)
+
+        echo -e "\033[1;36m[POD]\033[0m $pod (NS: $ns | Estado: $status | IP: ${ip:-N/A})"
+
+        if [ -z "$ip" ] || [ "$status" != "Running" ]; then
+            echo "   \033[1;31m[X] Imposible escanear: el pod no está en ejecución o no tiene IP asignada.\033[0m"
+            echo "------------------------------------------------------------------"
+            continue
+        fi
+
+        for port in "${puertos_comunes[@]}"; do
+            (
+                if nc -z -w 1 "$ip" "$port" 2>/dev/null || (echo > "/dev/tcp/$ip/$port") 2>/dev/null; then
+                    local srv=$(mapear_servicio_puerto "$port")
+                    echo -e "   \033[1;32m[+] Puerto $port/TCP ABIERTO\033[0m -> Servicio: \033[1;33m$srv\033[0m"
+                fi
+            ) &
+        done
+        wait
+
+        local puertos_spec=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[*].ports[*].containerPort}' 2>/dev/null)
+        if [ -n "$puertos_spec" ]; then
+            echo -e "   \033[1;34m[*] Puertos expuestos según manifiesto:\033[0m $puertos_spec"
+        fi
+
+        echo "------------------------------------------------------------------"
+    done
 }
 
 # --- FUNCIONES DE EVALUACIÓN Y CONEXIONES DE RED ---
@@ -325,7 +592,7 @@ probar_red_cluster() {
     echo "Creando/verificando $total_maquinas pod(s) de prueba (rango: $inicio a $fin)..."
 
     for ((i=inicio; i<=fin; i++)); do
-        if ! kubectl get pod "pod-prueba-$i" >/dev/null 2>&1; then
+        if ! kubectl get pod "pod-prueba-$i" -A >/dev/null 2>&1; then
             kubectl run "pod-prueba-$i" --image=nginx:alpine --port=80 >/dev/null 2>&1
         fi
     done
@@ -344,7 +611,7 @@ probar_red_cluster() {
     rm -f conexion.log >/dev/null 2>&1
 
     for ((i=inicio; i<=fin; i++)); do
-        IP_POD=$(kubectl get pod "pod-prueba-$i" -o jsonpath='{.status.podIP}' 2>/dev/null)
+        IP_POD=$(kubectl get pod -A --no-headers -o custom-columns="NAME:.metadata.name,IP:.status.podIP" 2>/dev/null | grep -w "pod-prueba-$i" | awk '{print $2}')
 
         if [ -n "$IP_POD" ]; then
             STATUS=$(kubectl exec probador-red -- curl -s -o /dev/null -w "%{http_code}" "http://$IP_POD" 2>/dev/null)
@@ -366,7 +633,7 @@ probar_red_cluster() {
 
         read -e -p "¿Deseas cargar automáticamente estos pods en la selección? (s/n): " opcion
         if [[ "$opcion" =~ ^[sS]$ ]]; then
-            actualizar_pods "-A"
+            actualizar_pods
             for idx in "${!PODS_LIST[@]}"; do
                 for ((k=inicio; k<=fin; k++)); do
                     if [ "${PODS_LIST[$idx]}" == "pod-prueba-$k" ]; then
@@ -390,8 +657,6 @@ probar_conexion_entre_pods() {
         return 1
     fi
 
-    actualizar_pods "-A"
-
     if obtener_pods_por_indice "$id_orig" "$id_dest"; then
         local pod_origen="${PODS_TEMPORALES[0]}"
         local ns_origen="${NS_TEMPORALES[0]}"
@@ -405,7 +670,7 @@ probar_conexion_entre_pods() {
             return 1
         fi
 
-        echo -e "\nProbando conectividad desde '$pod_origen' hacia '$pod_destino' ($ip_destino)..."
+        echo -e "\nProbando conectividad desde '$pod_origen' ($ns_origen) hacia '$pod_destino' ($ip_destino)..."
 
         RESPUESTA=$(kubectl exec -n "$ns_origen" "$pod_origen" -- sh -c "curl -s -m 3 http://$ip_destino || wget -qO- -T 3 http://$ip_destino" 2>&1)
         EXIT_CODE=$?
@@ -432,7 +697,7 @@ echo " Consola Interactiva K3s (Gestión de Pods)"
 echo " Escribe 'help' o 'help <comando>' para asistencia."
 echo "=================================================="
 
-actualizar_pods "-A"
+actualizar_pods
 
 while true; do
     PROMPT="${PROMPT:-k3s> }"
@@ -459,22 +724,19 @@ while true; do
 
     case "$COMANDO" in
         list|pods)
-            FLAG="-A"
-            if [ -n "$SUBACCION" ] && [ "$SUBACCION" != "pod" ] && [ "$SUBACCION" != "pods" ] && [ "$SUBACCION" != "-A" ]; then
-                FLAG="-n $SUBACCION"
-            fi
-            actualizar_pods "$FLAG"
+            listar_pods_pantalla "$SUBACCION" "${INPUT[2]}"
+            ;;
 
-            if [ ${#PODS_LIST[@]} -eq 0 ]; then
-                echo "No se encontraron pods de aplicación/prueba disponibles."
-            else
-                echo -e "\nID   NAMESPACE         NOMBRE DEL POD"
-                echo "--------------------------------------------------"
-                for i in "${!PODS_LIST[@]}"; do
-                    printf "%-4d %-17s %s\n" $((i + 1)) "${PODS_NS_LIST[$i]}" "${PODS_LIST[$i]}"
-                done
-                echo ""
-            fi
+        check-ports)
+            escanear_puertos_pod "$SUBACCION"
+            ;;
+
+        close-port)
+            cerrar_puerto_pod "$SUBACCION"
+            ;;
+
+        open-port)
+            abrir_puerto_pod "$SUBACCION"
             ;;
 
         ip|get-ip)
@@ -609,14 +871,14 @@ while true; do
                 fi
 
                 for ((i=INICIO; i<=FIN; i++)); do
-                    if ! kubectl get pod "pod-prueba-$i" >/dev/null 2>&1; then
+                    if ! kubectl get pod "pod-prueba-$i" -A >/dev/null 2>&1; then
                         kubectl run "pod-prueba-$i" --image="$IMAGEN_POD" >/dev/null 2>&1
                         echo "Pod 'pod-prueba-$i' creado ($IMAGEN_POD)."
                     else
                         echo "Pod 'pod-prueba-$i' ya existe."
                     fi
                 done
-                actualizar_pods "-A"
+                actualizar_pods
             else
                 echo "Error: Especifica un pod (1-50) o un rango válido (ej: 1-50, 5-10)."
                 echo "Ejemplos:"
