@@ -505,7 +505,6 @@ monitorizar_conexiones() {
     echo -e "Registrando eventos en '\033[1;33m$log_file\033[0m'."
     echo -e "Presiona \033[1;31mCtrl+C\033[0m para salir del modo auditoría.\n"
 
-    # Captura mejorada con exclusión nativa de red interna/Pods y localhost
     sudo tcpdump -i any -n -e -l "tcp[tcpflags] & tcp-syn != 0 and ($filter_ports) and not src net 10.42.0.0/16 and not src 127.0.0.1" 2>/dev/null | \
     while read -r line; do
         local ips=($(echo "$line" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}\.[0-9]+'))
@@ -682,19 +681,6 @@ probar_red_cluster() {
         echo "Verifica el archivo conexion.log para detalles."
     else
         echo -e "[OK] ¡Comunicaciones exitosas con los $total_maquinas pods especificados!\n"
-
-        read -e -p "¿Deseas cargar automáticamente estos pods en la selección? (s/n): " opcion
-        if [[ "$opcion" =~ ^[sS]$ ]]; then
-            actualizar_pods
-            for idx in "${!PODS_LIST[@]}"; do
-                for ((k=inicio; k<=fin; k++)); do
-                    if [ "${PODS_LIST[$idx]}" == "pod-prueba-$k" ]; then
-                        añadir_a_seleccion "$((idx + 1))" >/dev/null
-                    fi
-                done
-            done
-            echo "Pods del rango importados a la selección activa."
-        fi
     fi
 
     kubectl delete pod probador-red --grace-period=0 --force >/dev/null 2>&1
@@ -733,16 +719,110 @@ probar_conexion_entre_pods() {
         else
             echo -e "[X] Error de conexión hacia $ip_destino:"
             echo "$RESPUESTA"
-            echo -e "\nTip: Si el pod de origen es una imagen muy reducida sin 'curl' ni 'wget', la ejecución fallará localmente en el contenedor."
         fi
     fi
 }
 
+# --- EVALUACIÓN DE ARGUMENTOS DIRECTOS (MODO GUI / CLI) ---
+if [ $# -gt 0 ]; then
+    COMANDO_CLI="$1"
+    SUBACCION_CLI="$2"
+    ARGUMENTOS_CLI=("${@:2}")
+
+    case "$COMANDO_CLI" in
+        list|pods)
+            listar_pods_pantalla "$SUBACCION_CLI" "${3}"
+            exit 0
+            ;;
+        check-ports)
+            escanear_puertos_pod "$SUBACCION_CLI"
+            exit 0
+            ;;
+        close-port)
+            cerrar_puerto_pod "$SUBACCION_CLI"
+            exit 0
+            ;;
+        open-port)
+            abrir_puerto_pod "$SUBACCION_CLI"
+            exit 0
+            ;;
+        monitor-connect)
+            monitorizar_conexiones
+            exit 0
+            ;;
+        ip|get-ip)
+            obtener_ip_pod "$SUBACCION_CLI" "${3}"
+            exit 0
+            ;;
+        add|select)
+            if [ "$SUBACCION_CLI" == "pod" ] || [ "$SUBACCION_CLI" == "pods" ]; then
+                añadir_a_seleccion "${@:3}"
+            else
+                añadir_a_seleccion "${ARGUMENTOS_CLI[@]}"
+            fi
+            exit 0
+            ;;
+        remove|deselect)
+            if [ "$SUBACCION_CLI" == "pod" ] || [ "$SUBACCION_CLI" == "pods" ]; then
+                quitar_de_seleccion "${@:3}"
+            else
+                quitar_de_seleccion "${ARGUMENTOS_CLI[@]}"
+            fi
+            exit 0
+            ;;
+        create)
+            imagen="nginx:alpine"
+            if [ "${3}" == "-i" ] || [ "${3}" == "--image" ]; then
+                [ -n "${4}" ] && imagen="${4}"
+            fi
+            if [[ "$SUBACCION_CLI" =~ ^[0-9]+$ ]]; then
+                for ((c=1; c<=SUBACCION_CLI; c++)); do
+                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                done
+                echo "Creados $SUBACCION_CLI pods con la imagen '$imagen'."
+            elif [[ "$SUBACCION_CLI" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                i_c="${BASH_REMATCH[1]}"
+                f_c="${BASH_REMATCH[2]}"
+                for ((c=i_c; c<=f_c; c++)); do
+                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                done
+                echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
+            fi
+            exit 0
+            ;;
+        test-network)
+            probar_red_cluster "$SUBACCION_CLI"
+            exit 0
+            ;;
+        test-connections)
+            probar_conexion_entre_pods "$SUBACCION_CLI" "${3}"
+            exit 0
+            ;;
+        version)
+            echo "K3s Manager versión: $VERSION"
+            comprobar_actualizacion
+            exit 0
+            ;;
+        update)
+            actualizar_k3smanager
+            exit 0
+            ;;
+        help)
+            mostrar_ayuda "$SUBACCION_CLI"
+            exit 0
+            ;;
+        *)
+            echo "Comando CLI no reconocido: '$COMANDO_CLI'"
+            exit 1
+            ;;
+    esac
+fi
+
+# --- BUCLE PRINCIPAL (TERMINAL INTERACTIVA) ---
+
 HISTFILE=~/.k3smanager_history
 HISTSIZE=1000
 SAVEHIST=1000
-
-# --- BUCLE PRINCIPAL (TERMINAL INTERACTIVA) ---
 
 echo "=================================================="
 echo " Consola Interactiva K3s (Gestión de Pods)"
@@ -778,55 +858,45 @@ while true; do
         list|pods)
             listar_pods_pantalla "$SUBACCION" "${INPUT[2]}"
             ;;
-
         check-ports)
             escanear_puertos_pod "$SUBACCION"
             ;;
-
         close-port)
             cerrar_puerto_pod "$SUBACCION"
             ;;
-
         open-port)
             abrir_puerto_pod "$SUBACCION"
             ;;
-
         monitor-connect)
             monitorizar_conexiones
             ;;
-
         ip|get-ip)
             obtener_ip_pod "$SUBACCION" "${INPUT[2]}"
             ;;
-
         add|select)
             if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
                 PARAMS=("${ARGUMENTOS[@]}")
             fi
-
             if [ ${#PARAMS[@]} -eq 0 ]; then
                 echo "Error: Indica los ID numéricos de los pods. Ejemplo: add 1 10"
             else
                 añadir_a_seleccion "${PARAMS[@]}"
             fi
             ;;
-
         remove|deselect)
             if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
                 PARAMS=("${ARGUMENTOS[@]}")
             fi
-
             if [ ${#PARAMS[@]} -eq 0 ]; then
                 echo "Error: Indica los ID numéricos de los pods. Ejemplo: remove 1"
             else
                 quitar_de_seleccion "${PARAMS[@]}"
             fi
             ;;
-
         show)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "No hay ningún pod seleccionado."
@@ -838,17 +908,14 @@ while true; do
                 echo ""
             fi
             ;;
-
         clear-sel)
             SELECCIONADOS_PODS=()
             SELECCIONADOS_NAMESPACES=()
             echo "Selección limpiada."
             ;;
-
         clear)
             clear
             ;;
-
         describe)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "Error: No hay pods seleccionados."
@@ -871,7 +938,6 @@ while true; do
                 done
             fi
             ;;
-
         logs)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "Error: No hay pods seleccionados."
@@ -881,7 +947,6 @@ while true; do
                 kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}" --tail=50
             fi
             ;;
-
         delete)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "Error: No hay pods seleccionados para eliminar."
@@ -897,7 +962,6 @@ while true; do
                 fi
             fi
             ;;
-
         create)
             if [ -z "$SUBACCION" ]; then
                 echo "Error: Indica cuántos pods crear o un rango. Ejemplos: create 5, create 1-10"
@@ -907,7 +971,7 @@ while true; do
                     [ -n "${INPUT[3]}" ] && imagen="${INPUT[3]}"
                 fi
 
-                if [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
+                if [[ "$SUBACCIndex" =~ ^[0-9]+$ ]] || [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
                     for ((c=1; c<=SUBACCION; c++)); do
                         kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
                     done
@@ -923,20 +987,16 @@ while true; do
                 actualizar_pods
             fi
             ;;
-
         test-network)
             probar_red_cluster "$SUBACCION"
             ;;
-
         test-connections)
             probar_conexion_entre_pods "$SUBACCION" "${INPUT[2]}"
             ;;
-
         version)
             echo "K3s Manager versión: $VERSION"
             comprobar_actualizacion
             ;;
-
         update)
             actualizar_k3smanager
             if [ $? -eq 0 ]; then
@@ -945,16 +1005,13 @@ while true; do
                 exec "$0" "$@"
             fi
             ;;
-
         help)
             mostrar_ayuda "$SUBACCION"
             ;;
-
         exit|quit)
             echo "Saliendo de K3s Manager. ¡Hasta luego!"
             exit 0
             ;;
-
         *)
             echo "Comando no reconocido: '$COMANDO'. Escribe 'help' para ver los comandos disponibles."
             ;;
