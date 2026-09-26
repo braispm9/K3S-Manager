@@ -10,6 +10,7 @@ GUI_SCRIPT_NAME="k3smanager-gui.py"
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
+DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
 
 echo "====================================================="
@@ -38,7 +39,6 @@ echo "[i] Instalando para el usuario del sistema: $REAL_USER"
 # 2. Detección del sistema e instalación automática de dependencias
 echo -e "\n[1/4] Verificando e instalando dependencias del sistema..."
 
-# Herramientas de red y utilidades comunes requeridas por herramientas de gestión/monitorización
 UTILS_DEBIAN="curl fzf tcpdump netcat-openbsd iproute2 python3 python3-tk"
 UTILS_FEDORA="curl fzf tcpdump nc iproute python3 python3-tkinter"
 
@@ -75,12 +75,24 @@ else
     echo "    • K3s ya está instalado en este nodo."
 fi
 
-# --- PERMISOS CLAVE PARA USUARIO NORMAL ---
-# Otorga permisos de lectura al archivo kubeconfig para que cualquier usuario
-# ejecute comandos de kubectl sin usar sudo de forma permanente.
+# --- CONFIGURACIÓN ROBUSTA DE PERMISOS Y KUBECONFIG PARA USUARIO NORMAL ---
+echo -e "\n[i] Configurando acceso sin sudo a Kubernetes para el usuario $REAL_USER..."
 if [ -f /etc/rancher/k3s/k3s.yaml ]; then
-    chmod 644 /etc/rancher/k3s/k3s.yaml
-    echo "    • Permisos de '/etc/rancher/k3s/k3s.yaml' ajustados a 644 (Acceso OK sin sudo)."
+    # Crear la carpeta .kube en el directorio personal del usuario real
+    mkdir -p "$REAL_HOME/.kube"
+
+    # Copiar el archivo de configuración de K3s al directorio del usuario
+    cp /etc/rancher/k3s/k3s.yaml "$REAL_HOME/.kube/config"
+
+    # Ajustar propietario y permisos estrictos requeridos por kubectl (600)
+    chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.kube"
+    chmod 600 "$REAL_HOME/.kube/config"
+
+    # Asegurar permisos globales básicos en /etc/rancher por si acaso
+    chmod +x /etc/rancher 2>/dev/null
+    chmod +rx /etc/rancher/k3s 2>/dev/null
+
+    echo "    • Kubeconfig copiado y configurado en '$REAL_HOME/.kube/config' (Acceso OK sin sudo)."
 fi
 
 
@@ -90,19 +102,20 @@ RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRA
 RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
 
 curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
+cp "$DESTINO_CLI" "$DESTINO_SH"
 curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
 
-# Validar descarga correcta de la consola
 if [ -s "$DESTINO_CLI" ]; then
     chmod +x "$DESTINO_CLI"
+    chmod +x "$DESTINO_SH"
     chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI"
+    chown "$REAL_USER":"$REAL_USER" "$DESTINO_SH"
     echo "    • Componente CLI instalado en: $DESTINO_CLI"
 else
     echo -e "\n\033[1;31m[X] Error: No se pudo descargar el script CLI desde GitHub.\033[0m"
     exit 1
 fi
 
-# Validar descarga de la interfaz gráfica (opcional/advertencia si falla)
 if [ -s "$DESTINO_GUI" ]; then
     chmod +x "$DESTINO_GUI"
     chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
@@ -122,16 +135,18 @@ else
     RC_FILE="$REAL_HOME/.bashrc"
 fi
 
-# Limpieza previa de alias duplicados si existieran
+# Limpieza previa de configuraciones previas si existieran
 if [ -f "$RC_FILE" ]; then
     sed -i.bak '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null
     sed -i.bak '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null
+    sed -i.bak '/export KUBECONFIG/d' "$RC_FILE" 2>/dev/null
 fi
 
-# Escribir accesos directos limpios y optimizados (lanzamiento directo y GUI independiente en segundo plano)
+# Escribir accesos directos y la variable KUBECONFIG en el entorno del usuario
 cat << 'EOF' >> "$RC_FILE"
 
-# --- K3s Manager Shortcuts ---
+# --- K3s Manager Shortcuts & Environment ---
+export KUBECONFIG="$HOME/.kube/config"
 alias k3smanager='k3smanager'
 alias k3smanager-gui='python3 /usr/local/bin/k3smanager-gui >/dev/null 2>&1 & disown'
 EOF
@@ -140,7 +155,7 @@ chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null
 
 echo -e "\n\033[1;32m==================================================\033[0m"
 echo -e "\033[1;32m ¡Instalación completada con éxito!\033[0m"
-echo -e "\033[1;32m==================================================\033[0m"
+echo -e "\n\033[1;32m==================================================\033[0m"
 echo "Ya puedes utilizar la herramienta abriendo una nueva terminal"
 echo "o ejecutando inmediatamente en tu consola actual:"
 echo -e "  \033[1;33msource $RC_FILE\033[0m"
