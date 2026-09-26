@@ -6,6 +6,7 @@ import subprocess
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
+import webbrowser  # <--- Importante para abrir los enlaces de GitHub
 
 # Archivo de script requerido
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -165,7 +166,6 @@ class RoundedEntry(tk.Canvas):
     if w < 10:
       w = self.forced_width
 
-    # Dibujar el contorno redondeado del input con su borde brillante
     self.create_rounded_rect(
         1, 1, w - 2, h - 2, self.radius,
         fill=self.bg_color,
@@ -328,7 +328,7 @@ class K3sManagerGUI:
         ("pods", " 📦 Gestión de Pods "),
         ("red", " 🌐 Red y Puertos "),
         ("auditoria", " 🛡️ Auditoría y Sistema "),
-        ("ayuda", " 📖 Ayuda "),
+        ("ayuda", " 📖 Ayuda & Creators "),
     ]
 
     for key, text in tabs_data:
@@ -621,6 +621,7 @@ class K3sManagerGUI:
   def crear_pestana_ayuda(self):
     frame = self.frames["ayuda"]
 
+    # Contenedor superior para la Guía
     help_card = RoundedLabelFrame(frame, text=" Guía de Uso del Sistema ", radius=16, bg_canvas=self.bg_window, padding=10)
     help_card.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     help_inner = help_card.inner_frame
@@ -666,6 +667,47 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
 """
     help_text.insert(tk.END, contenido_ayuda)
     help_text.config(state=tk.DISABLED)
+
+    # --- APARTADO CREATORS ---
+    creator_card = RoundedLabelFrame(frame, text=" Creators & Maintainers ", radius=16, bg_canvas=self.bg_window, padding=12)
+    creator_card.pack(fill=tk.X, padx=5, pady=(0, 5))
+    creator_inner = creator_card.inner_frame
+    creator_inner.pack(fill=tk.BOTH, expand=True)
+
+    tk.Label(
+        creator_inner,
+        text="K3s Manager ha sido desarrollado y optimizado por:",
+        bg=self.bg_card,
+        fg=self.text_muted,
+        font=("Segoe UI", 9)
+    ).pack(anchor=tk.W, padx=5, pady=(0, 8))
+
+    btns_creators_frame = tk.Frame(creator_inner, bg=self.bg_card)
+    btns_creators_frame.pack(fill=tk.X, padx=5, pady=2)
+
+    RoundedButton(
+        btns_creators_frame,
+        text="GitHub: braispm9",
+        command=lambda: webbrowser.open("https://github.com/braispm9"),
+        width=200,
+        height=36,
+        radius=12,
+        bg_color="#1e293b",
+        hover_color="#38bdf8",
+        bg_canvas=self.bg_card
+    ).pack(side=tk.LEFT, padx=(0, 10))
+
+    RoundedButton(
+        btns_creators_frame,
+        text="GitHub: pwnddev",
+        command=lambda: webbrowser.open("https://github.com/pwnddev"),
+        width=200,
+        height=36,
+        radius=12,
+        bg_color="#1e293b",
+        hover_color="#38bdf8",
+        bg_canvas=self.bg_card
+    ).pack(side=tk.LEFT, padx=10)
 
   def actualizar_lista_pods(self):
     def tarea():
