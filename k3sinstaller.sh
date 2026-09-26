@@ -7,23 +7,24 @@ BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
 
-# Guardado de los scripts en la carpeta actual donde se ejecuta el instalador
-DIRECTORIO_ACTUAL="$(cd "$(dirname "$0")" && pwd)"
-DESTINO_CLI="${DIRECTORIO_ACTUAL}/${SCRIPT_NAME}"
-DESTINO_GUI="${DIRECTORIO_ACTUAL}/${GUI_SCRIPT_NAME}"
+# Directorio de instalación global recomendado para scripts ejecutables de usuario
+INSTALL_DIR="/usr/local/bin"
+DESTINO_CLI="${INSTALL_DIR}/k3smanager"
+DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
 
 echo "====================================================="
-echo " Instalador de K3s Manager (CLI & Interfaz Gráfica)"
+echo " Instalador Definitivo de K3s Manager (CLI & GUI)"
 echo "====================================================="
 
-# 0. Verificar que se ejecute como root o con sudo
+# 0. Comprobar privilegios de administrador de forma clara
 if [ "$EUID" -ne 0 ]; then
-    echo "   [X] Error crítico: Este script debe ejecutarse obligatoriamente como root o utilizando sudo."
-    echo "       Prueba ejecutando: sudo ./k3sinstaller.sh"
+    echo -e "\n\033[1;31m[X] Error: Este instalador necesita permisos de administrador.\033[0m"
+    echo "    Por favor, ejecútalo escribiendo:"
+    echo -e "    \033[1;33msudo ./install.sh\033[0m\n"
     exit 1
 fi
 
-# 1. Detectar el usuario real (si se ejecuta con sudo) y su directorio HOME
+# 1. Identificar al usuario real que lanzó el comando con sudo (evita instalar todo en /root/)
 if [ -n "$SUDO_USER" ]; then
     REAL_USER="$SUDO_USER"
     REAL_HOME=$(eval echo "~$SUDO_USER")
@@ -32,69 +33,87 @@ else
     REAL_HOME="$HOME"
 fi
 
-echo "Instalando para el usuario: $REAL_USER ($REAL_HOME)"
+echo "[i] Instalando para el usuario del sistema: $REAL_USER"
 
-# 2. Comprobar e instalar dependencias básicas del sistema (incluyendo Python y Tkinter)
-echo -e "\n1. Verificando dependencias del sistema..."
+# 2. Detección del sistema e instalación automática de dependencias
+echo -e "\n[1/4] Verificando e instalando dependencias del sistema..."
 
-DEPENDENCIAS=("curl" "fzf" "python3" "python3-tk")
-if command -v kubectl &>/dev/null; then
-    echo "[OK] Kubernetes"
+# Herramientas de red y utilidades comunes requeridas por herramientas de gestión/monitorización
+UTILS_DEBIAN="curl fzf tcpdump netcat-openbsd iproute2 python3 python3-tk"
+UTILS_FEDORA="curl fzf tcpdump nc iproute python3 python3-tkinter"
+
+if command -v apt &> /dev/null; then
+    echo "    • Sistema basado en Debian/Ubuntu detectado (apt)."
+    apt-get update -qq
+    apt-get install -y $UTILS_DEBIAN
+elif command -v dnf &> /dev/null; then
+    echo "    • Sistema basado en Fedora detectado (dnf)."
+    dnf install -y $UTILS_FEDORA
+elif command -v yum &> /dev/null; then
+    echo "    • Sistema basado en CentOS/RHEL detectado (yum)."
+    yum install -y $UTILS_FEDORA
 else
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
-    echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    echo -e "\n\033[1;31m[X] No se pudo detectar un gestor de paquetes compatible (apt, dnf, yum).\033[0m"
+    exit 1
 fi
 
-for dep in "${DEPENDENCIAS[@]}"; do
-    if ! command -v "$dep" &> /dev/null; then
-        echo "   [!] '$dep' no está instalado. Intentando instalar..."
-        if command -v apt &> /dev/null; then
-            apt update && apt install -y "$dep" || apt install -y python3-tk
-        elif command -v yum &> /dev/null; then
-            yum install -y "$dep"
-        elif command -v brew &> /dev/null; then
-            brew install "$dep"
-        else
-            echo "   [X] No se pudo instalar '$dep' automáticamente. Por favor instálalo manualmente."
-            exit 1
-        fi
-    else
-        echo "   [OK] '$dep' ya está instalado."
-    fi
-done
+# 3. Asegurar kubectl y K3s
+echo -e "\n[2/4] Verificando Kubernetes (K3s y kubectl)..."
+if ! command -v kubectl &> /dev/null; then
+    echo "    • Instalando kubectl..."
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    rm -f kubectl
+else
+    echo "    • kubectl ya está instalado."
+fi
 
-# 3. Descargar los scripts principales (CLI y GUI) desde GitHub
-echo -e "\n2. Descargando scripts desde GitHub..."
+if ! command -v k3s &> /dev/null; then
+    echo "    • K3s no detectado. Instalando K3s servidor local..."
+    curl -sfL https://get.k3s.io | sh -
+else
+    echo "    • K3s ya está instalado en este nodo."
+fi
+
+# --- PERMISOS CLAVE PARA USUARIO NORMAL ---
+# Otorga permisos de lectura al archivo kubeconfig para que cualquier usuario
+# ejecute comandos de kubectl sin usar sudo de forma permanente.
+if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+    chmod 644 /etc/rancher/k3s/k3s.yaml
+    echo "    • Permisos de '/etc/rancher/k3s/k3s.yaml' ajustados a 644 (Acceso OK sin sudo)."
+fi
+
+
+# 4. Descargar los scripts directamente desde GitHub a la ruta global
+echo -e "\n[3/4] Descargando componentes desde el repositorio..."
 RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
 RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
 
 curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
 curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
 
-if [ $? -eq 0 ] && [ -s "$DESTINO_CLI" ]; then
-    echo "   [OK] Script CLI descargado correctamente en: $DESTINO_CLI"
+# Validar descarga correcta de la consola
+if [ -s "$DESTINO_CLI" ]; then
+    chmod +x "$DESTINO_CLI"
+    chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI"
+    echo "    • Componente CLI instalado en: $DESTINO_CLI"
 else
-    echo "   [X] Error al descargar el script CLI desde GitHub."
-    rm -f "$DESTINO_CLI"
+    echo -e "\n\033[1;31m[X] Error: No se pudo descargar el script CLI desde GitHub.\033[0m"
     exit 1
 fi
 
+# Validar descarga de la interfaz gráfica (opcional/advertencia si falla)
 if [ -s "$DESTINO_GUI" ]; then
-    echo "   [OK] Script GUI descargado correctamente en: $DESTINO_GUI"
+    chmod +x "$DESTINO_GUI"
+    chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
+    echo "    • Componente GUI instalado en: $DESTINO_GUI"
 else
-    echo "   [!] Advertencia: No se pudo descargar la interfaz gráfica (GUI) o no existe aún en el repositorio con ese nombre."
+    echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar o aún no está publicada."
 fi
 
-# Ajustar permisos de los scripts descargados
-chmod +x "$DESTINO_CLI"
-chmod +x "$DESTINO_GUI" 2>/dev/null
-chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI" "$DESTINO_GUI" 2>/dev/null
 
-# 4. Detectar el archivo de configuración (.zshrc o .bashrc) del usuario real
-echo -e "\n3. Configurando los alias..."
-
+# 5. Configuración automática del entorno del usuario (.bashrc o .zshrc)
+echo -e "\n[4/4] Configurando accesos directos..."
 USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
 
 if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
@@ -103,44 +122,30 @@ else
     RC_FILE="$REAL_HOME/.bashrc"
 fi
 
-# Definir los alias: modo CLI y modo Gráfico Independiente con disown
-ALIAS_CLI="alias k3smanager='source $DESTINO_CLI'"
-ALIAS_GUI="alias k3smanager-gui='python3 \"$DESTINO_GUI\" >/dev/null 2>&1 & disown'"
-
-touch "$RC_FILE"
-
-# Limpiar alias previos si existían para evitar duplicados
-if grep -q "alias k3smanager=" "$RC_FILE" 2>/dev/null; then
-    sed -i.bak '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null || sed -i '' '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null
-fi
-if grep -q "alias k3smanager-gui=" "$RC_FILE" 2>/dev/null; then
-    sed -i.bak '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null || sed -i '' '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null
+# Limpieza previa de alias duplicados si existieran
+if [ -f "$RC_FILE" ]; then
+    sed -i.bak '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null
+    sed -i.bak '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null
 fi
 
-echo "" >> "$RC_FILE"
-echo "# Aliases K3s Manager" >> "$RC_FILE"
-echo "$ALIAS_CLI" >> "$RC_FILE"
-echo "$ALIAS_GUI" >> "$RC_FILE"
+# Escribir accesos directos limpios y optimizados (lanzamiento directo y GUI independiente en segundo plano)
+cat << 'EOF' >> "$RC_FILE"
 
-chown "$REAL_USER" "$RC_FILE" 2>/dev/null
+# --- K3s Manager Shortcuts ---
+alias k3smanager='k3smanager'
+alias k3smanager-gui='python3 /usr/local/bin/k3smanager-gui >/dev/null 2>&1 & disown'
+EOF
 
-# Cargar k3s como última dependencia si no está presente
-if command -v k3s &>/dev/null; then
-    echo "[OK] K3S"
-else
-    curl -sfL https://get.k3s.io | sh -
-    sudo chmod 644 /etc/rancher/k3s/k3s.yaml
-    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-fi
+chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null
 
-echo "   [OK] Comandos configurados correctamente en $RC_FILE"
-
-echo -e "\n=================================================="
-echo " ¡Instalación completada con éxito!"
-echo " Para aplicar los cambios inmediatamente ejecuta en tu consola:"
-echo "   source $RC_FILE"
+echo -e "\n\033[1;32m==================================================\033[0m"
+echo -e "\033[1;32m ¡Instalación completada con éxito!\033[0m"
+echo -e "\033[1;32m==================================================\033[0m"
+echo "Ya puedes utilizar la herramienta abriendo una nueva terminal"
+echo "o ejecutando inmediatamente en tu consola actual:"
+echo -e "  \033[1;33msource $RC_FILE\033[0m"
 echo ""
-echo " Comandos disponibles:"
-echo "   • k3smanager     -> Ejecuta la versión de consola interactiva"
-echo "   • k3smanager-gui -> Abre la interfaz gráfica independiente"
+echo "Comandos disponibles desde cualquier lugar:"
+echo "  • Consola interactiva : k3smanager"
+echo "  • Interfaz Gráfica    : k3smanager-gui"
 echo "=================================================="
