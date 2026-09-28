@@ -11,7 +11,7 @@ GUI_SCRIPT_NAME="k3smanager-gui.py"
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
-DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
+DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui.py"
 
 echo "====================================================="
 echo " Instalador Definitivo de K3s Manager (CLI & GUI)"
