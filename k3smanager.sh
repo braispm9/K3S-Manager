@@ -49,35 +49,45 @@ mostrar_ayuda() {
             echo "    ID            Lista pod con dicha ID"
             echo "    X-Y           Lista pods desde x - y"
             echo "    namespace     Lista pods con nombre: namespace"
+            ;;
         select)
             echo "Uso: select <ID>"
             echo "Selecciona las máquinas con las IDs especificadas"
+            ;;
         remove)
             echo "Uso: remove <ID>"
             echo "Elimina de la selección las máquinas con las Ids especificadas"
+            ;;
         clear-sel)
             echo "Uso: clear-sel"
             echo "Elimina las máquinas seleccionadas de la selección"
+            ;;
         clear)
             echo "Uso: clear"
             echo "Limpia la línea de comandos para verla limpia"
+            ;;
         show)
             echo "Uso: show"
             echo "Muestra todas las IDs de las máquinas seleccionadas"
+            ;;
         ip)
             echo "Uso: ip <OPTIONS> [ns]"
             echo "OPTIONS:"
             echo "    IDs        -Lista las ips de las máquinas con dichos IDs"
             echo "    namespace  -Lista las ips de las máquinas con dichos nombres"
+            ;;
         describe)
             echo "Uso: describe [OPTIONS]"
             echo "OPTIONS:"
             echo "    -l        -Describe de forma detallada toda la información sobre los pods seleccionados"
+            ;;
         logs)
             echo "Uso: logs"
             echo "Muestra los logs de configuración"
+            ;;
         delete)
-            echo "Uso: 
+            echo "Uso: "
+            ;;
         *)
             echo -e "\nNo hay información detallada sobre '$cmd'. Escribe 'help' para ver la lista.\n"
             ;;
