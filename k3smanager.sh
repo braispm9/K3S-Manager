@@ -12,16 +12,16 @@ mostrar_ayuda() {
 
     if [ -z "$cmd" ]; then
         echo -e "\nComandos disponibles para Pods:"
-        echo "  pods [ID|N-M|namespace|-A] - Listar pods con ID estricto (ej: pods, pods 1, pods 1-50)"
-        echo "  add pod <IDs...>           - Añadir pod(s) por su ID numérico asignado (ej: add pod 1 10)"
-        echo "  remove pod <IDs...>        - Quitar pod(s) de la selección activa (ej: remove pod 1)"
+        echo "  list [OPTIONS] - Listar pods con ID estricto (ej: pods, pods 1, pods 1-50)"
+        echo "  select <IDs>               - Añadir pod(s) por su ID numérico asignado (ej: add pod 1 10)"
+        echo "  remove <IDs>               - Quitar pod(s) de la selección activa (ej: remove pod 1)"
         echo "  clear-sel                  - Limpiar toda la selección de pods actual"
         echo "  clear                      - Limpiar la pantalla de la terminal"
         echo "  show                       - Mostrar pods seleccionados actualmente"
         echo ""
         echo "Comandos de información y acción:"
-        echo "  ip <ID | nombre> [ns]      - Obtener la IP interna de un pod por su ID o nombre"
-        echo "  describe [-l]              - Ver información resumida o completa (-l) de la selección"
+        echo "  ip <OPTIONS>               - Obtener la IP interna de un pod por su ID o nombre"
+        echo "  describe [OPTIONS]              - Ver información resumida o completa (-l) de la selección"
         echo "  logs                       - Mostrar logs (requiere seleccionar solo 1 pod)"
         echo "  delete                     - Eliminar el/los pod(s) seleccionados"
         echo "  create <N|N-M> [-i imagen] - Crea pod individual o rango con imagen opcional"
@@ -42,53 +42,42 @@ mostrar_ayuda() {
     fi
 
     case $cmd in
-        pods|list)
-            echo -e "\nUSO: pods [ID | N-M | namespace | -n namespace | -A]"
-            echo "Muestra los pods disponibles asignando un ID numérico único correlativo (1, 2, 3...)."
-            ;;
-        check-ports)
-            echo -e "\nUSO: check-ports [ID | N-M]"
-            echo "Escanea y muestra los puertos abiertos en los pods indicados o seleccionados."
-            ;;
-        close-port)
-            echo -e "\nUSO: close-port <ID | N-M>"
-            echo "Aplica una NetworkPolicy para aislar y bloquear el tráfico entrante al pod especificado."
-            ;;
-        open-port)
-            echo -e "\nUSO: open-port <ID | N-M>"
-            echo "Elimina el aislamiento por NetworkPolicy del pod, volviendo a permitir la comunicación."
-            ;;
-        monitor-connect)
-            echo -e "\nUSO: monitor-connect"
-            echo "Detecta dinámicamente todos los puertos TCP en escucha (LISTEN) en la máquina host."
-            echo "Captura en tiempo real todos los intentos de conexión TCP (SYN) entrantes."
-            echo "Omite automáticamente el tráfico de loopback (127.0.0.1) y la subred K3s (10.42.0.0/16)."
-            echo "Guarda la actividad con marca de tiempo e IP formateada en 'monitor_connect.log'."
-            ;;
-        ip)
-            echo -e "\nUSO: ip <ID_numérico | nombre_pod> [namespace]"
-            echo "Muestra la dirección IP asignada al pod mediante su ID numérico."
-            ;;
-        create)
-            echo -e "\nUSO: create <N | N-M> [--image <imagen> | -i <imagen>]"
-            echo "Crea pods de prueba individuales o por rango."
-            ;;
-        describe)
-            echo -e "\nUSO: describe [-l]"
-            echo "Muestra la información de los pods seleccionados mediante sus IDs."
-            ;;
-        test-network)
-            echo -e "\nUSO: test-network [N | N-M | -a | --all]"
-            echo "Crea y mide conectividad hacia los pods especificados por su número (1 al 50)."
-            ;;
-        test-connections)
-            echo -e "\nUSO: test-connections [ID_ORIGEN] [ID_DESTINO]"
-            echo "Realiza una petición HTTP entre dos pods identificados por sus IDs numéricos."
-            ;;
+        list)
+            echo "Uso: list [OPTIONS]"
+            echo "[OPTIONS]:"
+            echo "    -a            Lista todos los pods"
+            echo "    ID            Lista pod con dicha ID"
+            echo "    X-Y           Lista pods desde x - y"
+            echo "    namespace     Lista pods con nombre: namespace"
+        select)
+            echo "Uso: select <ID>"
+            echo "Selecciona las máquinas con las IDs especificadas"
+        remove)
+            echo "Uso: remove <ID>"
+            echo "Elimina de la selección las máquinas con las Ids especificadas"
+        clear-sel)
+            echo "Uso: clear-sel"
+            echo "Elimina las máquinas seleccionadas de la selección"
         clear)
-            echo -e "\nUSO: clear"
-            echo "Limpia la pantalla de la terminal."
-            ;;
+            echo "Uso: clear"
+            echo "Limpia la línea de comandos para verla limpia"
+        show)
+            echo "Uso: show"
+            echo "Muestra todas las IDs de las máquinas seleccionadas"
+        ip)
+            echo "Uso: ip <OPTIONS> [ns]"
+            echo "OPTIONS:"
+            echo "    IDs        -Lista las ips de las máquinas con dichos IDs"
+            echo "    namespace  -Lista las ips de las máquinas con dichos nombres"
+        describe)
+            echo "Uso: describe [OPTIONS]"
+            echo "OPTIONS:"
+            echo "    -l        -Describe de forma detallada toda la información sobre los pods seleccionados"
+        logs)
+            echo "Uso: logs"
+            echo "Muestra los logs de configuración"
+        delete)
+            echo "Uso: 
         *)
             echo -e "\nNo hay información detallada sobre '$cmd'. Escribe 'help' para ver la lista.\n"
             ;;
@@ -855,7 +844,7 @@ while true; do
     ARGUMENTOS=("${INPUT[@]:1}")
 
     case "$COMANDO" in
-        list|pods)
+        list)
             listar_pods_pantalla "$SUBACCION" "${INPUT[2]}"
             ;;
         check-ports)
