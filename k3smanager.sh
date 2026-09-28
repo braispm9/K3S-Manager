@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="Release 4.0"
+VERSION="Release 4.1"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
