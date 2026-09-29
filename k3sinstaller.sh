@@ -6,7 +6,7 @@ REPO_NAME="K3S-Manager"
 BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
-INSTALLER_VERSION="1.7"
+INSTALLER_VERSION="1.9"
 
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
@@ -75,7 +75,7 @@ seleccionar_modo() {
     echo "  4) Cancelar"
     echo ""
     read -e -p "Selecciona una opción (1-4): " opcion
-    
+
     case $opcion in
         1)
             INSTALL_MODE="cli"
@@ -199,20 +199,17 @@ instalar_kubernetes() {
     fi
 
     echo "    • Instalando / Actualizando K3s servidor local..."
-    
-    # Intentar instalación estándar con el script oficial
+
     if ! curl -sfL https://get.k3s.io | sh -; then
         echo "    • Instalador oficial falló. Aplicando instalación robusta manual..."
     fi
 
-    # Comprobación de seguridad: asegurar que el binario y el servicio systemd existen y funcionan
     if ! command -v k3s &> /dev/null; then
         echo "    • Descargando binario de K3s manualmente..."
         curl -sfL https://github.com/k3s-io/k3s/releases/latest/download/k3s -o /usr/local/bin/k3s
         chmod +x /usr/local/bin/k3s
     fi
 
-    # Crear servicio systemd de forma explícita si no existe o falló
     if [ ! -f /etc/systemd/system/k3s.service ]; then
         echo "    • Creando unidad systemd para K3s..."
         cat << 'EOF' > /etc/systemd/system/k3s.service
@@ -239,7 +236,6 @@ WantedBy=multi-user.target
 EOF
     fi
 
-    # Recargar y arrancar el servicio de forma limpia
     systemctl daemon-reload
     systemctl enable k3s >/dev/null 2>&1
     systemctl restart k3s
@@ -248,7 +244,6 @@ EOF
 # --- FUNCIÓN PARA CONFIGURAR RED ---
 configurar_red() {
     echo -e "\n[i] Configurando reenvío de IP y reglas de red/firewall para K3s..."
-    # Habilitar IP Forwarding en el Kernel
     sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
     if ! grep -q "net.ipv4.ip_forward" /etc/sysctl.conf; then
         echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
@@ -257,7 +252,6 @@ configurar_red() {
     fi
     sysctl -p /etc/sysctl.conf >/dev/null 2>&1
 
-    # Ajustes específicos de Firewall según la distribución detectada
     if command -v firewall-cmd &> /dev/null && systemctl is-active --quiet firewalld; then
         echo "    • Configurando firewalld (Fedora/RHEL) para permitir interfaces de contenedores..."
         firewall-cmd --permanent --add-interface=cni0 >/dev/null 2>&1
@@ -275,8 +269,7 @@ configurar_red() {
 # --- FUNCIÓN PARA CONFIGURAR KUBECONFIG ---
 configurar_kubeconfig() {
     echo -e "\n[i] Configurando acceso sin sudo a Kubernetes para el usuario $REAL_USER..."
-    
-    # Bucle de espera hasta que K3s genere el archivo k3s.yaml (máximo 15 segundos)
+
     local intentos=0
     while [ ! -f /etc/rancher/k3s/k3s.yaml ] && [ $intentos -lt 15 ]; do
         sleep 1
@@ -284,20 +277,12 @@ configurar_kubeconfig() {
     done
 
     if [ -f /etc/rancher/k3s/k3s.yaml ]; then
-        # Crear la carpeta .kube en el directorio personal del usuario real
         mkdir -p "$REAL_HOME/.kube"
-
-        # Copiar el archivo de configuración de K3s al directorio del usuario
         cp /etc/rancher/k3s/k3s.yaml "$REAL_HOME/.kube/config"
-
-        # Ajustar propietario y permisos estrictos requeridos por kubectl (600)
         chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.kube"
         chmod 600 "$REAL_HOME/.kube/config"
-
-        # Asegurar permisos globales básicos en /etc/rancher por si acaso
         chmod +x /etc/rancher 2>/dev/null
         chmod +rx /etc/rancher/k3s 2>/dev/null
-
         echo "    • Kubeconfig copiado y configurado en '$REAL_HOME/.kube/config' (Acceso OK sin sudo)."
     else
         echo -e "\n\033[1;31m[X] Advertencia: No se pudo encontrar /etc/rancher/k3s/k3s.yaml. Revisa el estado con 'sudo systemctl status k3s'.\033[0m"
@@ -310,7 +295,6 @@ descargar_componentes() {
     RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
     RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
 
-    # Instalar CLI si es requerido
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
         curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
         cp "$DESTINO_CLI" "$DESTINO_SH"
@@ -327,7 +311,6 @@ descargar_componentes() {
         fi
     fi
 
-    # Instalar GUI si es requerido
     if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
         curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
 
@@ -352,13 +335,13 @@ configurar_aliases() {
         RC_FILE="$REAL_HOME/.bashrc"
     fi
 
-    # Escribir accesos directos y la variable KUBECONFIG en el entorno del usuario
+    # Se añade nohup, redirección de logs y desvinculación (&) para liberar la terminal al instante
     cat << 'EOF' >> "$RC_FILE"
 
 # --- K3s Manager Shortcuts & Environment ---
 export KUBECONFIG="$HOME/.kube/config"
 alias k3smanager='k3smanager'
-alias k3smanager-gui='python3 /usr/local/bin/k3smanager-gui >/dev/null 2>&1 & disown'
+alias k3smanager-gui='nohup python3 /usr/local/bin/k3smanager-gui > "$HOME/k3s_gui_error.log" 2>&1 & disown'
 EOF
 
     chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null
@@ -367,22 +350,22 @@ EOF
 # --- FUNCIÓN PARA MOSTRAR MENSAJE FINAL ---
 mensaje_final() {
     echo -e "\n\033[1;32m==================================================\033[0m"
-    echo -e "\033[1;32m ¡Instalación completada con éxito!\033[0m"
+    echo -e "\n\033[1;32m ¡Instalación completada con éxito!\033[0m"
     echo -e "\n\033[1;32m==================================================\033[0m"
     echo "Ya puedes utilizar la herramienta abriendo una nueva terminal"
     echo "o ejecutando inmediatamente en tu consola actual:"
     echo -e "  \033[1;33msource $RC_FILE\033[0m"
     echo ""
     echo "Componentes instalados:"
-    
+
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
         echo "  • Consola interactiva : k3smanager"
     fi
-    
+
     if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
         echo "  • Interfaz Gráfica    : k3smanager-gui"
     fi
-    
+
     echo "=================================================="
 }
 
@@ -405,7 +388,6 @@ case "${1:-}" in
         ;;
 esac
 else
-    # Modo interactivo si no hay argumentos
     seleccionar_modo
 fi
 
