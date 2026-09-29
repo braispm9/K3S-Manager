@@ -26,3 +26,11 @@ cp "$DESTINO_CLI" "$DESTINO_SH"
 # Ejecución del archivo
 chmod 777 "$DESTINO_SH"
 sudo "$DESTINO_SH"
+
+echo "Verificando actualizaciones con GitHub..."
+
+if [ -n "$ZSH_VERSION" ]; then
+    SCRIPT_ACTUAL="${(%):-%x}"
+else
+    SCRIPT_ACTUAL="${BASH_SOURCE[0]:-$0}"
+fi
