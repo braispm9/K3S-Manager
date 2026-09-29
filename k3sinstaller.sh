@@ -334,27 +334,22 @@ mensaje_final() {
 
 # --- MAIN: ANÁLISIS DE ARGUMENTOS ---
 if [ $# -gt 0 ]; then
-    case "$1" in
-        -v|--version)
-            mostrar_version
-            exit 0
-            ;;
-        -h|--help)
-            mostrar_ayuda
-            exit 0
-            ;;
-        cli)
-            INSTALL_MODE="cli"
-            ;;
-        gui)
-            INSTALL_MODE="gui"
-            ;;
-        *)
-            echo "Argumento no reconocido: '$1'"
-            echo "Usa: ./k3sinstaller.sh -h para ver la ayuda"
-            exit 1
-            ;;
-    esac
+case "${1:-}" in
+    -v|--version)
+        echo "K3s Manager Installer - Versión ${INSTALLER_VERSION}"
+        exit 0
+        ;;
+    -h|--help)
+        echo "Uso: $0 [cli|gui|-v|--version|-h|--help]"
+        echo ""
+        echo "  Sin argumentos       Instalación interactiva"
+        echo "  cli                  Instalar solo CLI"
+        echo "  gui                  Instalar solo GUI"
+        echo "  -v, --version        Mostrar versión sin instalar"
+        echo "  -h, --help           Mostrar ayuda"
+        exit 0
+        ;;
+esac
 else
     # Modo interactivo si no hay argumentos
     seleccionar_modo
