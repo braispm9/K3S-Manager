@@ -334,6 +334,14 @@ comandos() {
 }
 
 Lista_Comandos=$("list" "select" "remove" "clear-sel" "clear" "show" "ip" "describe" "logs" "delete" "create" "check-ports" "close-port" "open-port" "monitor-connect" "test-network" "test-connections" "version" "update" "help" "exit")
+json_array=$(jq -nc '$ARGS.positional' --args "${Lista_Comandos[@]}")
+python3 -c '
+import sys, json
+
+data = json.loads(sys.argv[1])
+print("Array recibido en Python:", data)
+print("Primer elemento:", data[0])
+' "$json_array"
 
 listar_pods_pantalla() {
     local arg1="$1"
