@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION="Release 4.1"
+VERSION="Release 4.21"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
@@ -42,7 +42,7 @@ mostrar_ayuda() {
         echo "  version                    - Verifica si es la última versión y muestra la versión actual"
         echo "  update                     - Instala la última versión del software y se reactiva"
         echo "  help [comando]             - Ayuda general o de una función específica"
-        echo -e "  exit | quit                - Salir de la consola\n"
+        echo -e "  exit                    - Salir de la consola\n"
         return
     fi
 
@@ -207,10 +207,10 @@ comandos() {
         monitor-connect)
             monitorizar_conexiones
             ;;
-        ip|get-ip)
+        ip)
             obtener_ip_pod "$SUBAC" "${INPUT[2]}"
             ;;
-        add|select)
+        select)
             if [ "$SUBAC" == "pod" ] || [ "$SUBAC" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
@@ -222,7 +222,7 @@ comandos() {
                 añadir_a_seleccion "${PARAMS[@]}"
             fi
             ;;
-        remove|deselect)
+        remove)
             if [ "$SUBAC" == "pod" ] || [ "$SUBAC" == "pods" ]; then
                 PARAMS=("${INPUT[@]:2}")
             else
@@ -333,7 +333,7 @@ comandos() {
     esac
 }
 
-Lista_Comandos=$("list" "select" "remove" "" "" "" "" "" "" "" "" "" "" "" "" "" )
+Lista_Comandos=$("list" "select" "remove" "clear-sel" "clear" "show" "ip" "describe" "logs" "delete" "create" "check-ports" "close-port" "open-port" "monitor-connect" "test-network" "test-connections" "version" "update" "help" "exit")
 
 listar_pods_pantalla() {
     local arg1="$1"
