@@ -11,11 +11,23 @@ import webbrowser
 import sys
 import json
 
+# Comprobar si se ha pasado el argumento JSON por la línea de comandos de forma segura
+if len(sys.argv) > 1:
+    json_string = sys.argv[1]
+    try:
+        data = json.loads(json_string)
+        if not isinstance(data, (dict, list)):
+            data = {}
+    except (json.JSONDecodeError, TypeError):
+        data = {}
+else:
+    # Comportamiento por defecto si se abre de forma independiente
+    data = {}
+    print("[i] Abriendo K3s Manager GUI sin datos externos (modo independiente).")
+
 # Archivo de script requerido
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_BASH = os.path.join(BASE_DIR, "k3smanager.sh")
-
-json_string = sys.argv[1]
 
 def insertar_texto_ansi(widget_text, texto):
   """Interpreta códigos de escape ANSI básicos y de 256 colores para Tkinter ScrolledText."""
@@ -143,46 +155,10 @@ class RoundedButton(tk.Canvas):
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
+        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
+        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
+        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -289,46 +265,10 @@ class RoundedEntry(tk.Canvas):
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
+        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
+        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
+        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -416,46 +356,10 @@ class RoundedLabelFrame(tk.Frame):
 
   def create_rounded_rect(self, canvas, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
+        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
+        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
+        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return canvas.create_polygon(points, smooth=True, **kwargs)
 
@@ -484,8 +388,8 @@ class K3sManagerGUI:
     # Directorio de trabajo actual para simular shell persistente
     self.current_working_dir = os.path.expanduser("~")
 
-    # Lista de comandos disponibles para autocompletado en la terminal
-    self.comandos_completado = json.loads(json_string)
+    # Lista de comandos disponibles para autocompletado en la terminal (usando el diccionario 'data' ya parseado)
+    self.comandos_completado = data if isinstance(data, (list, dict)) else {}
 
     self.style = ttk.Style()
     self.style.theme_use("clam")
@@ -1244,7 +1148,7 @@ class K3sManagerGUI:
         comando_a_ejecutar = cmd
         if not cmd.startswith("/") and not cmd.startswith("bash"):
           # Si el comando es una opción reconocida del gestor, la enrutamos al script bash
-          opciones_manager = json.loads(json_string)
+          opciones_manager = data if isinstance(data, (list, dict)) else {}
           primer_token = cmd.split()[0] if cmd else ""
           if primer_token in opciones_manager and os.path.exists(SCRIPT_BASH):
             comando_a_ejecutar = f"bash {SCRIPT_BASH} {cmd}"
