@@ -1267,8 +1267,7 @@ class K3sManagerGUI:
         if not cmd.startswith("/") and not cmd.startswith("bash"):
           # Si el comando es una opción reconocida del gestor, la enrutamos al script bash
           opciones_manager = [
-              "help",
-              "list",
+              "pods",
               "add",
               "remove",
               "clear-sel",
