@@ -968,29 +968,26 @@ while true; do
             fi
             ;;
         create)
-            if [ -z "$SUBACCION" ]; then
-                echo "Error: Indica cuántos pods crear o un rango. Ejemplos: create 5, create 1-10"
-            else
-                imagen="nginx:alpine"
-                if [ "${INPUT[2]}" == "-i" ] || [ "${INPUT[2]}" == "--image" ]; then
-                    [ -n "${INPUT[3]}" ] && imagen="${INPUT[3]}"
-                fi
-
-                if [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
-                    for ((c=1; c<=SUBACCION; c++)); do
-                        kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
-                    done
-                    echo "Creados $SUBACCION pods con la imagen '$imagen'."
-                elif [[ "$SUBACCION" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                    i_c="${BASH_REMATCH[1]}"
-                    f_c="${BASH_REMATCH[2]}"
-                    for ((c=i_c; c<=f_c; c++)); do
-                        kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
-                    done
-                    echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
-                fi
-                actualizar_pods
+            imagen="nginx:alpine"
+            if [ "${INPUT[2]}" == "-i" ] || [ "${INPUT[2]}" == "--image" ]; then
+                [ -n "${INPUT[3]}" ] && imagen="${INPUT[3]}"
             fi
+            if [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
+                for ((c=1; c<=SUBACCION; c++)); do
+                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                done
+                echo "Creados $SUBACCION pods con la imagen '$imagen'."
+            elif [[ "$SUBACCION" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+                i_c="${BASH_REMATCH[1]}"
+                f_c="${BASH_REMATCH[2]}"
+                for ((c=i_c; c<=f_c; c++)); do
+                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+                done
+                echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
+            else
+                echo "Error: Especifica un número o un rango (ej: create 3 o create 1-5)."
+            fi
+            actualizar_pods
             ;;
         test-network)
             probar_red_cluster "$SUBACCION"
