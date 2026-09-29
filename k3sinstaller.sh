@@ -6,13 +6,13 @@ REPO_NAME="K3S-Manager"
 BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
-INSTALLER_VERSION="1.6"
+INSTALLER_VERSION="1.7"
 
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
-DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui.py"
+DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
 
 # --- FUNCIÓN PARA MOSTRAR VERSIÓN ---
 mostrar_version() {
@@ -101,7 +101,7 @@ seleccionar_modo() {
 limpiar_previos() {
     echo -e "\n\033[1;33m[!] Limpiando instalaciones previas de K3s Manager...\033[0m"
 
-    # Eliminar archivos de instalación anteriores
+    # Eliminar archivos de instalación anteriores (incluyendo compatibilidad con versiones previas con .py)
     if [ -f "$DESTINO_CLI" ]; then
         rm -f "$DESTINO_CLI"
         echo "    • Eliminado: $DESTINO_CLI"
@@ -115,6 +115,11 @@ limpiar_previos() {
     if [ -f "$DESTINO_GUI" ]; then
         rm -f "$DESTINO_GUI"
         echo "    • Eliminado: $DESTINO_GUI"
+    fi
+
+    if [ -f "${DESTINO_GUI}.py" ]; then
+        rm -f "${DESTINO_GUI}.py"
+        echo "    • Eliminado: ${DESTINO_GUI}.py"
     fi
 
     # Limpiar archivos de historial y temporales del usuario
