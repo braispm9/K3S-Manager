@@ -4,17 +4,15 @@
 GITHUB_USER="braispm9"
 REPO_NAME="K3S-Manager"
 BRANCH="main"
-INSTALLER_VERSION="1.6"
-
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
+INSTALLER_VERSION="1.6"
+
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
+DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui.py"
-# Versiones sin extensión (estos son los que se usan en la terminal)
-DESTINO_SH_NOEXT="${INSTALL_DIR}/k3smanager"
-DESTINO_GUI_NOEXT="${INSTALL_DIR}/k3smanager-gui"
 
 # --- FUNCIÓN PARA MOSTRAR VERSIÓN ---
 mostrar_version() {
@@ -103,7 +101,12 @@ seleccionar_modo() {
 limpiar_previos() {
     echo -e "\n\033[1;33m[!] Limpiando instalaciones previas de K3s Manager...\033[0m"
 
-    # Eliminar archivos de instalación anteriores (con extensión)
+    # Eliminar archivos de instalación anteriores
+    if [ -f "$DESTINO_CLI" ]; then
+        rm -f "$DESTINO_CLI"
+        echo "    • Eliminado: $DESTINO_CLI"
+    fi
+
     if [ -f "$DESTINO_SH" ]; then
         rm -f "$DESTINO_SH"
         echo "    • Eliminado: $DESTINO_SH"
@@ -112,17 +115,6 @@ limpiar_previos() {
     if [ -f "$DESTINO_GUI" ]; then
         rm -f "$DESTINO_GUI"
         echo "    • Eliminado: $DESTINO_GUI"
-    fi
-
-    # Eliminar versiones sin extensión
-    if [ -f "$DESTINO_SH_NOEXT" ]; then
-        rm -f "$DESTINO_SH_NOEXT"
-        echo "    • Eliminado: $DESTINO_SH_NOEXT"
-    fi
-
-    if [ -f "$DESTINO_GUI_NOEXT" ]; then
-        rm -f "$DESTINO_GUI_NOEXT"
-        echo "    • Eliminado: $DESTINO_GUI_NOEXT"
     fi
 
     # Limpiar archivos de historial y temporales del usuario
@@ -201,12 +193,51 @@ instalar_kubernetes() {
         echo "    • kubectl ya está instalado."
     fi
 
-    if ! command -v k3s &> /dev/null; then
-        echo "    • K3s no detectado. Instalando K3s servidor local..."
-        curl -sfL https://get.k3s.io | sh -
-    else
-        echo "    • K3s ya está instalado en este nodo."
+    echo "    • Instalando / Actualizando K3s servidor local..."
+    
+    # Intentar instalación estándar con el script oficial
+    if ! curl -sfL https://get.k3s.io | sh -; then
+        echo "    • Instalador oficial falló. Aplicando instalación robusta manual..."
     fi
+
+    # Comprobación de seguridad: asegurar que el binario y el servicio systemd existen y funcionan
+    if ! command -v k3s &> /dev/null; then
+        echo "    • Descargando binario de K3s manualmente..."
+        curl -sfL https://github.com/k3s-io/k3s/releases/latest/download/k3s -o /usr/local/bin/k3s
+        chmod +x /usr/local/bin/k3s
+    fi
+
+    # Crear servicio systemd de forma explícita si no existe o falló
+    if [ ! -f /etc/systemd/system/k3s.service ]; then
+        echo "    • Creando unidad systemd para K3s..."
+        cat << 'EOF' > /etc/systemd/system/k3s.service
+[Unit]
+Description=Lightweight Kubernetes
+Documentation=https://k3s.io
+After=network-online.target firewalld.service
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/k3s server
+KillMode=process
+Delegate=yes
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+TimeoutStartSec=0
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
+
+    # Recargar y arrancar el servicio de forma limpia
+    systemctl daemon-reload
+    systemctl enable k3s >/dev/null 2>&1
+    systemctl restart k3s
 }
 
 # --- FUNCIÓN PARA CONFIGURAR RED ---
@@ -239,6 +270,14 @@ configurar_red() {
 # --- FUNCIÓN PARA CONFIGURAR KUBECONFIG ---
 configurar_kubeconfig() {
     echo -e "\n[i] Configurando acceso sin sudo a Kubernetes para el usuario $REAL_USER..."
+    
+    # Bucle de espera hasta que K3s genere el archivo k3s.yaml (máximo 15 segundos)
+    local intentos=0
+    while [ ! -f /etc/rancher/k3s/k3s.yaml ] && [ $intentos -lt 15 ]; do
+        sleep 1
+        intentos=$((intentos + 1))
+    done
+
     if [ -f /etc/rancher/k3s/k3s.yaml ]; then
         # Crear la carpeta .kube en el directorio personal del usuario real
         mkdir -p "$REAL_HOME/.kube"
@@ -255,6 +294,8 @@ configurar_kubeconfig() {
         chmod +rx /etc/rancher/k3s 2>/dev/null
 
         echo "    • Kubeconfig copiado y configurado en '$REAL_HOME/.kube/config' (Acceso OK sin sudo)."
+    else
+        echo -e "\n\033[1;31m[X] Advertencia: No se pudo encontrar /etc/rancher/k3s/k3s.yaml. Revisa el estado con 'sudo systemctl status k3s'.\033[0m"
     fi
 }
 
@@ -266,16 +307,15 @@ descargar_componentes() {
 
     # Instalar CLI si es requerido
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
-        curl -fsSL -o "$DESTINO_SH" "$RAW_URL_CLI"
+        curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
+        cp "$DESTINO_CLI" "$DESTINO_SH"
 
-        if [ -s "$DESTINO_SH" ]; then
+        if [ -s "$DESTINO_CLI" ]; then
+            chmod +x "$DESTINO_CLI"
             chmod +x "$DESTINO_SH"
+            chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI"
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_SH"
-            # Crear versión sin extensión que apunte al script con extensión
-            cp "$DESTINO_SH" "$DESTINO_SH_NOEXT"
-            chmod +x "$DESTINO_SH_NOEXT"
-            chown "$REAL_USER":"$REAL_USER" "$DESTINO_SH_NOEXT"
-            echo "    • Componente CLI instalado en: $DESTINO_SH_NOEXT (y $DESTINO_SH)"
+            echo "    • Componente CLI instalado en: $DESTINO_CLI"
         else
             echo -e "\n\033[1;31m[X] Error: No se pudo descargar el script CLI desde GitHub.\033[0m"
             exit 1
@@ -289,13 +329,9 @@ descargar_componentes() {
         if [ -s "$DESTINO_GUI" ]; then
             chmod +x "$DESTINO_GUI"
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
-            # Crear versión sin extensión que apunte al script Python
-            cp "$DESTINO_GUI" "$DESTINO_GUI_NOEXT"
-            chmod +x "$DESTINO_GUI_NOEXT"
-            chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI_NOEXT"
-            echo "    • Componente GUI instalado en: $DESTINO_GUI_NOEXT (y $DESTINO_GUI)"
+            echo "    • Componente GUI instalado en: $DESTINO_GUI"
         else
-            echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar."
+            echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar o aún no está publicada."
         fi
     fi
 }
@@ -312,11 +348,12 @@ configurar_aliases() {
     fi
 
     # Escribir accesos directos y la variable KUBECONFIG en el entorno del usuario
-    # Ya no necesitan alias porque los comandos sin extensión están en /usr/local/bin
     cat << 'EOF' >> "$RC_FILE"
 
 # --- K3s Manager Shortcuts & Environment ---
 export KUBECONFIG="$HOME/.kube/config"
+alias k3smanager='k3smanager'
+alias k3smanager-gui='python3 /usr/local/bin/k3smanager-gui >/dev/null 2>&1 & disown'
 EOF
 
     chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null
