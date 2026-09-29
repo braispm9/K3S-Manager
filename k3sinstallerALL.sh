@@ -25,3 +25,4 @@ cp "$DESTINO_CLI" "$DESTINO_SH"
 
 # Ejecución del archivo
 chmod 777 "$DESTINO_SH"
+sudo "$DESTINO_SH"
