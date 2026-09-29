@@ -4,13 +4,12 @@
 GITHUB_USER="braispm9"
 REPO_NAME="K3S-Manager"
 BRANCH="main"
+INSTALLER_VERSION="1.6"
+
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
-INSTALLER_VERSION="1.5"
-
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
-DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui.py"
 
@@ -102,11 +101,6 @@ limpiar_previos() {
     echo -e "\n\033[1;33m[!] Limpiando instalaciones previas de K3s Manager...\033[0m"
 
     # Eliminar archivos de instalación anteriores
-    if [ -f "$DESTINO_CLI" ]; then
-        rm -f "$DESTINO_CLI"
-        echo "    • Eliminado: $DESTINO_CLI"
-    fi
-
     if [ -f "$DESTINO_SH" ]; then
         rm -f "$DESTINO_SH"
         echo "    • Eliminado: $DESTINO_SH"
@@ -258,15 +252,12 @@ descargar_componentes() {
 
     # Instalar CLI si es requerido
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
-        curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
-        cp "$DESTINO_CLI" "$DESTINO_SH"
+        curl -fsSL -o "$DESTINO_SH" "$RAW_URL_CLI"
 
-        if [ -s "$DESTINO_CLI" ]; then
-            chmod +x "$DESTINO_CLI"
+        if [ -s "$DESTINO_SH" ]; then
             chmod +x "$DESTINO_SH"
-            chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI"
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_SH"
-            echo "    • Componente CLI instalado en: $DESTINO_CLI"
+            echo "    • Componente CLI instalado en: $DESTINO_SH"
         else
             echo -e "\n\033[1;31m[X] Error: No se pudo descargar el script CLI desde GitHub.\033[0m"
             exit 1
@@ -282,7 +273,7 @@ descargar_componentes() {
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
             echo "    • Componente GUI instalado en: $DESTINO_GUI"
         else
-            echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar o aún no está publicada."
+            echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar."
         fi
     fi
 }
