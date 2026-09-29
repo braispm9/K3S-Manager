@@ -9,9 +9,12 @@ BRANCH="main"
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3sinstaller"
 DESTINO_SH="${INSTALL_DIR}/k3sinstaller.sh"
+DESTINO_UNINSTALLER="${INSTALL_DIR}/k3suninstaller.sh"
 INS_NAME="k3sinstaller.sh"
+UNINS_NAME="k3suninstaller.sh"
 
 RAW_URL_INS="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${INS_NAME}"
+RAW_URL_UNINS="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${UNINS_NAME}"
 
 # --- VERIFICACIÓN DE PERMISOS ---
 if [ "$EUID" -ne 0 ]; then
@@ -30,15 +33,19 @@ else
     REAL_HOME="$HOME"
 fi
 
-echo "Verificando actualizaciones con GitHub..."
+echo "Descargando componentes desde GitHub..."
 
-# --- DESCARGA DEL ARCHIVO ---
+# --- DESCARGA DEL INSTALADOR ---
 curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_INS"
 cp "$DESTINO_CLI" "$DESTINO_SH"
+
+# --- DESCARGA DEL DESINSTALADOR ---
+curl -fsSL -o "$DESTINO_UNINSTALLER" "$RAW_URL_UNINS"
 
 # --- PERMISOS DE EJECUCIÓN ---
 chmod +x "$DESTINO_SH"
 chmod +x "$DESTINO_CLI"
+chmod +x "$DESTINO_UNINSTALLER"
 
 echo ""
 echo "=================================================="
@@ -59,15 +66,8 @@ configurar_source() {
     sed -i.bak '/\. .*k3sinstaller.sh/d' "$RC_FILE" 2>/dev/null
     sed -i.bak '/# --- K3s Installer Source ---/d' "$RC_FILE" 2>/dev/null
     
-    # Agregar el nuevo source
-    cat << 'EOF' >> "$RC_FILE"
-
-# --- K3s Installer Source ---
-source /usr/local/bin/k3sinstaller.sh 2>/dev/null || true
-EOF
-    
     chown "$USER_NAME":"$USER_NAME" "$RC_FILE" 2>/dev/null
-    echo "    • Configurado source en: $RC_FILE"
+    echo "    • Limpiado: $RC_FILE"
 }
 
 # --- DETECTAR SHELL DEL USUARIO Y CONFIGURAR ---
@@ -81,7 +81,7 @@ if [ -f "$REAL_HOME/.bashrc" ]; then
     configurar_source "$REAL_HOME/.bashrc" "$REAL_USER"
 fi
 
-echo "    • Source agregado automáticamente"
+echo "    • Configuración limpiada"
 echo ""
 
 # --- EJECUTAR EL INSTALADOR ---
@@ -91,3 +91,16 @@ echo "=================================================="
 echo ""
 
 sudo -u "$REAL_USER" "$DESTINO_SH"
+
+echo ""
+echo "=================================================="
+echo " Instalación finalizada"
+echo "=================================================="
+echo ""
+echo "Componentes disponibles:"
+echo "  • Instalador  : k3sinstaller"
+echo "  • Desinstalador: k3suninstaller"
+echo ""
+echo "Para desinstalar en el futuro, ejecuta:"
+echo -e "  \033[1;33msudo k3suninstaller\033[0m"
+echo ""
