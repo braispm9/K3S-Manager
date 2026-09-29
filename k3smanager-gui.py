@@ -8,11 +8,14 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 import webbrowser
+import sys
+import json
 
 # Archivo de script requerido
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_BASH = os.path.join(BASE_DIR, "k3smanager.sh")
 
+json_string = sys.argv[1]
 
 def insertar_texto_ansi(widget_text, texto):
   """Interpreta códigos de escape ANSI básicos y de 256 colores para Tkinter ScrolledText."""
@@ -482,32 +485,7 @@ class K3sManagerGUI:
     self.current_working_dir = os.path.expanduser("~")
 
     # Lista de comandos disponibles para autocompletado en la terminal
-    self.comandos_completado = [
-        "pods",
-        "add pod",
-        "remove pod",
-        "clear-sel",
-        "show",
-        "ip",
-        "describe",
-        "logs",
-        "delete",
-        "create",
-        "check-ports",
-        "close-port",
-        "open-port",
-        "monitor-connect",
-        "test-network",
-        "test-connections",
-        "version",
-        "update",
-        "ls",
-        "cd",
-        "pwd",
-        "clear",
-        "exit",
-        "salir",
-    ]
+    self.comandos_completado = json.loads(json_string)
 
     self.style = ttk.Style()
     self.style.theme_use("clam")
@@ -1217,7 +1195,7 @@ class K3sManagerGUI:
     self.entry_terminal_cmd.delete(0, tk.END)
     insertar_texto_ansi(self.consola_terminal_tab, f"\n➜  ~ {cmd}\n")
 
-    if cmd.lower() in ["exit", "salir"]:
+    if cmd.lower() in ["exit"]:
       insertar_texto_ansi(
           self.consola_terminal_tab,
           "Sesión de terminal cerrada.\n➜  ~ ",
@@ -1266,26 +1244,7 @@ class K3sManagerGUI:
         comando_a_ejecutar = cmd
         if not cmd.startswith("/") and not cmd.startswith("bash"):
           # Si el comando es una opción reconocida del gestor, la enrutamos al script bash
-          opciones_manager = [
-              "pods",
-              "add",
-              "remove",
-              "clear-sel",
-              "show",
-              "ip",
-              "describe",
-              "logs",
-              "delete",
-              "create",
-              "check-ports",
-              "close-port",
-              "open-port",
-              "monitor-connect",
-              "test-network",
-              "test-connections",
-              "version",
-              "update",
-          ]
+          opciones_manager = json.loads(json_string)
           primer_token = cmd.split()[0] if cmd else ""
           if primer_token in opciones_manager and os.path.exists(SCRIPT_BASH):
             comando_a_ejecutar = f"bash {SCRIPT_BASH} {cmd}"
