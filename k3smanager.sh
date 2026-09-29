@@ -5,6 +5,12 @@ if [ "$REINICIANDO_K3SMANAGER" = true ]; then
 fi
 export PROMPT="k3s> "
 
+# --- INICIALIZACIÓN DE VARIABLES GLOBALES ---
+SELECCIONADOS_PODS=()
+SELECCIONADOS_NAMESPACES=()
+PODS_LIST=()
+PODS_NS_LIST=()
+
 # --- FUNCIONES DE AYUDA Y CONSOLA INTERACTIVA ---
 
 mostrar_ayuda() {
@@ -256,7 +262,7 @@ obtener_pods_por_indice() {
             PODS_TEMPORALES+=("${PODS_LIST[$idx]}")
             NS_TEMPORALES+=("${PODS_NS_LIST[$idx]}")
         else
-            echo "Error: El ID '$id' no es válido. Revisa los IDs con el comando 'pods'."
+            echo "Error: El ID '$id' no es válido. Revisa los IDs con el comando 'list'."
             return 1
         fi
     done
@@ -558,8 +564,8 @@ escanear_puertos_pod() {
         local inicio="${BASH_REMATCH[1]}"
         local fin="${BASH_REMATCH[2]}"
 
-        if [ "$inicio" -lt 1 ] || [ "$fin" -gt 50 ] || [ "$inicio" -gt "$fin" ]; then
-            echo "Error: El rango especificado ($inicio-$fin) debe estar entre 1 y 50."
+        if [ "$inicio" -lt 1 ] || [ "$fin" -gt "${#PODS_LIST[@]}" ] || [ "$inicio" -gt "$fin" ]; then
+            echo "Error: El rango especificado ($inicio-$fin) está fuera de los límites de pods disponibles."
             return 1
         fi
 
@@ -621,7 +627,7 @@ escanear_puertos_pod() {
 probar_red_cluster() {
     local arg="$1"
     local inicio=1
-    local fin=50
+    local fin=5
 
     if [[ "$arg" =~ ^[0-9]+$ ]]; then
         fin=$arg
@@ -630,11 +636,11 @@ probar_red_cluster() {
         fin="${BASH_REMATCH[2]}"
     elif [ "$arg" == "-a" ] || [ "$arg" == "--all" ]; then
         inicio=1
-        fin=50
+        fin=5
     fi
 
-    if [ "$inicio" -lt 1 ] || [ "$fin" -gt 50 ] || [ "$inicio" -gt "$fin" ]; then
-        echo "Error: Indica un número o rango válido entre 1 y 50 (ej: test-network 1-2)."
+    if [ "$inicio" -lt 1 ] || [ "$inicio" -gt "$fin" ]; then
+        echo "Error: Indica un número o rango válido (ej: test-network 1-2)."
         return 1
     fi
 
@@ -929,7 +935,7 @@ while true; do
                     else
                         echo -e "\n=== RESUMEN DE POD: $pod_actual ==="
                         echo "Namespace: $ns_actual"
-                        kubectl get pod "$pod_actual" -n "$ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount" --no-headers 2>/dev/null | awk '{print "Estado: "$1"\nIP: "$2"\nNodo: "$3"\nReinicios: "$4}'
+                        kubectl get pod "$pod_actual" -n "$ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount"
                         echo -e "\nEventos Recientes:"
                         kubectl get events -n "$ns_actual" --field-selector involvedObject.name="$pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
                         echo "--------------------------------------------------"
@@ -970,7 +976,7 @@ while true; do
                     [ -n "${INPUT[3]}" ] && imagen="${INPUT[3]}"
                 fi
 
-                if [[ "$SUBACCIndex" =~ ^[0-9]+$ ]] || [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
+                if [[ "$SUBACCION" =~ ^[0-9]+$ ]]; then
                     for ((c=1; c<=SUBACCION; c++)); do
                         kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
                     done
