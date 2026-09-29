@@ -36,8 +36,67 @@ fi
 
 echo "[i] Instalando para el usuario del sistema: $REAL_USER"
 
+# --- PASO CRÍTICO: LIMPIAR INSTALACIONES PREVIAS ---
+echo -e "\n\033[1;33m[!] Limpiando instalaciones previas de K3s Manager...\033[0m"
+
+# Eliminar archivos de instalación anteriores
+if [ -f "$DESTINO_CLI" ]; then
+    rm -f "$DESTINO_CLI"
+    echo "    • Eliminado: $DESTINO_CLI"
+fi
+
+if [ -f "$DESTINO_SH" ]; then
+    rm -f "$DESTINO_SH"
+    echo "    • Eliminado: $DESTINO_SH"
+fi
+
+if [ -f "$DESTINO_GUI" ]; then
+    rm -f "$DESTINO_GUI"
+    echo "    • Eliminado: $DESTINO_GUI"
+fi
+
+# Limpiar archivos de historial y temporales del usuario
+if [ -f "$REAL_HOME/.k3smanager_history" ]; then
+    rm -f "$REAL_HOME/.k3smanager_history"
+    echo "    • Eliminado historial: $REAL_HOME/.k3smanager_history"
+fi
+
+# Eliminar conexion.log y monitor_connect.log si existen
+if [ -f "$REAL_HOME/conexion.log" ]; then
+    rm -f "$REAL_HOME/conexion.log"
+    echo "    • Eliminado: $REAL_HOME/conexion.log"
+fi
+
+if [ -f "$REAL_HOME/monitor_connect.log" ]; then
+    rm -f "$REAL_HOME/monitor_connect.log"
+    echo "    • Eliminado: $REAL_HOME/monitor_connect.log"
+fi
+
+# Limpiar los aliases de .bashrc y .zshrc
+USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
+
+if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
+    if [ -f "$REAL_HOME/.zshrc" ]; then
+        sed -i.bak '/alias k3smanager=/d' "$REAL_HOME/.zshrc" 2>/dev/null
+        sed -i.bak '/alias k3smanager-gui=/d' "$REAL_HOME/.zshrc" 2>/dev/null
+        sed -i.bak '/export KUBECONFIG/d' "$REAL_HOME/.zshrc" 2>/dev/null
+        sed -i.bak '/# --- K3s Manager Shortcuts & Environment ---/d' "$REAL_HOME/.zshrc" 2>/dev/null
+        echo "    • Limpiados alias de: $REAL_HOME/.zshrc"
+    fi
+fi
+
+if [ -f "$REAL_HOME/.bashrc" ]; then
+    sed -i.bak '/alias k3smanager=/d' "$REAL_HOME/.bashrc" 2>/dev/null
+    sed -i.bak '/alias k3smanager-gui=/d' "$REAL_HOME/.bashrc" 2>/dev/null
+    sed -i.bak '/export KUBECONFIG/d' "$REAL_HOME/.bashrc" 2>/dev/null
+    sed -i.bak '/# --- K3s Manager Shortcuts & Environment ---/d' "$REAL_HOME/.bashrc" 2>/dev/null
+    echo "    • Limpiados alias de: $REAL_HOME/.bashrc"
+fi
+
+echo -e "\033[1;32m[OK] Limpieza completada.\033[0m\n"
+
 # 2. Detección del sistema e instalación automática de dependencias
-echo -e "\n[1/4] Verificando e instalando dependencias del sistema..."
+echo -e "[1/4] Verificando e instalando dependencias del sistema..."
 
 UTILS_DEBIAN="curl fzf tcpdump netcat-openbsd iproute2 python3 python3-tk"
 UTILS_FEDORA="curl fzf tcpdump nc iproute python3 python3-tkinter"
@@ -158,13 +217,6 @@ if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
     RC_FILE="$REAL_HOME/.zshrc"
 else
     RC_FILE="$REAL_HOME/.bashrc"
-fi
-
-# Limpieza previa de configuraciones previas si existieran
-if [ -f "$RC_FILE" ]; then
-    sed -i.bak '/alias k3smanager=/d' "$RC_FILE" 2>/dev/null
-    sed -i.bak '/alias k3smanager-gui=/d' "$RC_FILE" 2>/dev/null
-    sed -i.bak '/export KUBECONFIG/d' "$RC_FILE" 2>/dev/null
 fi
 
 # Escribir accesos directos y la variable KUBECONFIG en el entorno del usuario
