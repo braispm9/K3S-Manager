@@ -6,7 +6,7 @@ REPO_NAME="K3S-Manager"
 BRANCH="main"
 SCRIPT_NAME="k3smanager.sh"
 GUI_SCRIPT_NAME="k3smanager-gui.py"
-INSTALLER_VERSION="2.0"
+INSTALLER_VERSION="1.5"
 
 # Directorio de instalación global recomendado para scripts ejecutables de usuario
 INSTALL_DIR="/usr/local/bin"
