@@ -11,13 +11,6 @@ import webbrowser
 import sys
 import json
 
-resultado = subprocess.run(
-    ['/usr/local/bin/mi_programa'], # pon el nombre exacto de tu ejecutable
-    capture_output=True,
-    text=True,
-    check=True
-)
-
 # Comprobar si se ha pasado el argumento JSON por la línea de comandos de forma segura
 if len(sys.argv) > 1:
     json_string = sys.argv[1]
