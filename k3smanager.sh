@@ -4,7 +4,6 @@ if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
 export PROMPT="k3s> "
-
 # --- INICIALIZACIÓN DE VARIABLES GLOBALES ---
 SELECCIONADOS_PODS=()
 SELECCIONADOS_NAMESPACES=()
@@ -187,6 +186,154 @@ actualizar_pods() {
         fi
     done < <(kubectl get pods --all-namespaces --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | sort -k2 -V)
 }
+
+comandos() {
+    local COMAND="$1"
+    local SUBAC="$2"
+    local ARGUMENT="$3"
+        case "$COMAND" in
+        list)
+            listar_pods_pantalla "$SUBAC" "${INPUT[2]}"
+            ;;
+        check-ports)
+            escanear_puertos_pod "$SUBAC"
+            ;;
+        close-port)
+            cerrar_puerto_pod "$SUBAC"
+            ;;
+        open-port)
+            abrir_puerto_pod "$SUBAC"
+            ;;
+        monitor-connect)
+            monitorizar_conexiones
+            ;;
+        ip|get-ip)
+            obtener_ip_pod "$SUBAC" "${INPUT[2]}"
+            ;;
+        add|select)
+            if [ "$SUBAC" == "pod" ] || [ "$SUBAC" == "pods" ]; then
+                PARAMS=("${INPUT[@]:2}")
+            else
+                PARAMS=("${ARGUMENT[@]}")
+            fi
+            if [ ${#PARAMS[@]} -eq 0 ]; then
+                echo "Error: Indica los ID numéricos de los pods. Ejemplo: add 1 10"
+            else
+                añadir_a_seleccion "${PARAMS[@]}"
+            fi
+            ;;
+        remove|deselect)
+            if [ "$SUBAC" == "pod" ] || [ "$SUBAC" == "pods" ]; then
+                PARAMS=("${INPUT[@]:2}")
+            else
+                PARAMS=("${ARGUMENT[@]}")
+            fi
+            if [ ${#PARAMS[@]} -eq 0 ]; then
+                echo "Error: Indica los ID numéricos de los pods. Ejemplo: remove 1"
+            else
+                quitar_de_seleccion "${PARAMS[@]}"
+            fi
+            ;;
+        show)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "No hay ningún pod seleccionado."
+            else
+                echo -e "\nPods seleccionados actualmente:"
+                for i in "${!SELECCIONADOS_PODS[@]}"; do
+                    echo " - ${SELECCIONADOS_PODS[$i]} (namespace: ${SELECCIONADOS_NAMESPACES[$i]})"
+                done
+                echo ""
+            fi
+            ;;
+        clear-sel)
+            SELECCIONADOS_PODS=()
+            SELECCIONADOS_NAMESPACES=()
+            echo "Selección limpiada."
+            ;;
+        clear)
+            clear
+            ;;
+        describe)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados."
+            else
+                for i in "${!SELECCIONADOS_PODS[@]}"; do
+                    pod_actual="${SELECCIONADOS_PODS[$i]}"
+                    ns_actual="${SELECCIONADOS_NAMESPACES[$i]}"
+
+                    if [ "$SUBAC" == "-l" ]; then
+                        echo -e "\n=== INFORMACIÓN COMPLETA: $pod_actual (NS: $ns_actual) ==="
+                        kubectl describe pod "$pod_actual" -n "$ns_actual"
+                    else
+                        echo -e "\n=== RESUMEN DE POD: $pod_actual ==="
+                        echo "Namespace: $ns_actual"
+                        kubectl get pod "$pod_actual" -n "$ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount"
+                        echo -e "\nEventos Recientes:"
+                        kubectl get events -n "$ns_actual" --field-selector involvedObject.name="$pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
+                        echo "--------------------------------------------------"
+                    fi
+                done
+            fi
+            ;;
+        logs)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados."
+            elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
+                echo "Error: Selecciona únicamente 1 pod para ver sus logs."
+            else
+                kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}" --tail=50
+            fi
+            ;;
+        delete)
+            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
+                echo "Error: No hay pods seleccionados para eliminar."
+            else
+                read -e -p "¿Estás seguro de que deseas eliminar ${#SELECCIONADOS_PODS[@]} pod(s)? (s/n): " confirm
+                if [[ "$confirm" =~ ^[sS]$ ]]; then
+                    for i in "${!SELECCIONADOS_PODS[@]}"; do
+                        kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}"
+                    done
+                    SELECCIONADOS_PODS=()
+                    SELECCIONADOS_NAMESPACES=()
+                    actualizar_pods
+                fi
+            fi
+            ;;
+        create)
+            crear_pods "$SUBAC" "${INPUT[2]}" "${INPUT[3]}"
+            ;;
+        test-network)
+            probar_red_cluster "$SUBAC"
+            ;;
+        test-connections)
+            probar_conexion_entre_pods "$SUBAC" "${INPUT[2]}"
+            ;;
+        version)
+            echo "K3s Manager versión: $VERSION"
+            comprobar_actualizacion
+            ;;
+        update)
+            actualizar_k3smanager
+            if [ $? -eq 0 ]; then
+                echo "Reiniciando el script..."
+                export REINICIANDO_K3SMANAGER=true
+                exec "$0" "$@"
+            fi
+            ;;
+        help)
+            mostrar_ayuda "$SUBAC"
+            ;;
+        exit|quit)
+            echo "Saliendo de K3s Manager. ¡Hasta luego!"
+            exit 0
+            ;;
+        *)
+            echo "Comando no reconocido: '$COMANDO'. Escribe 'help' para ver los comandos disponibles."
+            ;;
+    esac
+}
+
+Lista_Comandos=$("list" "select" "remove" "" "" "" "" "" "" "" "" "" "" "" "" "" )
 
 listar_pods_pantalla() {
     local arg1="$1"
@@ -889,144 +1036,5 @@ while true; do
     SUBACCION="${INPUT[1]}"
     ARGUMENTOS=("${INPUT[@]:1}")
 
-    case "$COMANDO" in
-        list)
-            listar_pods_pantalla "$SUBACCION" "${INPUT[2]}"
-            ;;
-        check-ports)
-            escanear_puertos_pod "$SUBACCION"
-            ;;
-        close-port)
-            cerrar_puerto_pod "$SUBACCION"
-            ;;
-        open-port)
-            abrir_puerto_pod "$SUBACCION"
-            ;;
-        monitor-connect)
-            monitorizar_conexiones
-            ;;
-        ip|get-ip)
-            obtener_ip_pod "$SUBACCION" "${INPUT[2]}"
-            ;;
-        add|select)
-            if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
-                PARAMS=("${INPUT[@]:2}")
-            else
-                PARAMS=("${ARGUMENTOS[@]}")
-            fi
-            if [ ${#PARAMS[@]} -eq 0 ]; then
-                echo "Error: Indica los ID numéricos de los pods. Ejemplo: add 1 10"
-            else
-                añadir_a_seleccion "${PARAMS[@]}"
-            fi
-            ;;
-        remove|deselect)
-            if [ "$SUBACCION" == "pod" ] || [ "$SUBACCION" == "pods" ]; then
-                PARAMS=("${INPUT[@]:2}")
-            else
-                PARAMS=("${ARGUMENTOS[@]}")
-            fi
-            if [ ${#PARAMS[@]} -eq 0 ]; then
-                echo "Error: Indica los ID numéricos de los pods. Ejemplo: remove 1"
-            else
-                quitar_de_seleccion "${PARAMS[@]}"
-            fi
-            ;;
-        show)
-            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
-                echo "No hay ningún pod seleccionado."
-            else
-                echo -e "\nPods seleccionados actualmente:"
-                for i in "${!SELECCIONADOS_PODS[@]}"; do
-                    echo " - ${SELECCIONADOS_PODS[$i]} (namespace: ${SELECCIONADOS_NAMESPACES[$i]})"
-                done
-                echo ""
-            fi
-            ;;
-        clear-sel)
-            SELECCIONADOS_PODS=()
-            SELECCIONADOS_NAMESPACES=()
-            echo "Selección limpiada."
-            ;;
-        clear)
-            clear
-            ;;
-        describe)
-            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
-                echo "Error: No hay pods seleccionados."
-            else
-                for i in "${!SELECCIONADOS_PODS[@]}"; do
-                    pod_actual="${SELECCIONADOS_PODS[$i]}"
-                    ns_actual="${SELECCIONADOS_NAMESPACES[$i]}"
-
-                    if [ "$SUBACCION" == "-l" ]; then
-                        echo -e "\n=== INFORMACIÓN COMPLETA: $pod_actual (NS: $ns_actual) ==="
-                        kubectl describe pod "$pod_actual" -n "$ns_actual"
-                    else
-                        echo -e "\n=== RESUMEN DE POD: $pod_actual ==="
-                        echo "Namespace: $ns_actual"
-                        kubectl get pod "$pod_actual" -n "$ns_actual" -o custom-columns="ESTADO:.status.phase,IP:.status.podIP,NODO:.spec.nodeName,REINICIOS:.status.containerStatuses[0].restartCount"
-                        echo -e "\nEventos Recientes:"
-                        kubectl get events -n "$ns_actual" --field-selector involvedObject.name="$pod_actual" --no-headers 2>/dev/null | tail -n 3 | awk '{print " - "$0}' || echo " (Sin eventos)"
-                        echo "--------------------------------------------------"
-                    fi
-                done
-            fi
-            ;;
-        logs)
-            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
-                echo "Error: No hay pods seleccionados."
-            elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
-                echo "Error: Selecciona únicamente 1 pod para ver sus logs."
-            else
-                kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}" --tail=50
-            fi
-            ;;
-        delete)
-            if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
-                echo "Error: No hay pods seleccionados para eliminar."
-            else
-                read -e -p "¿Estás seguro de que deseas eliminar ${#SELECCIONADOS_PODS[@]} pod(s)? (s/n): " confirm
-                if [[ "$confirm" =~ ^[sS]$ ]]; then
-                    for i in "${!SELECCIONADOS_PODS[@]}"; do
-                        kubectl delete pod "${SELECCIONADOS_PODS[$i]}" -n "${SELECCIONADOS_NAMESPACES[$i]}"
-                    done
-                    SELECCIONADOS_PODS=()
-                    SELECCIONADOS_NAMESPACES=()
-                    actualizar_pods
-                fi
-            fi
-            ;;
-        create)
-            crear_pods "$SUBACCION" "${INPUT[2]}" "${INPUT[3]}"
-            ;;
-        test-network)
-            probar_red_cluster "$SUBACCION"
-            ;;
-        test-connections)
-            probar_conexion_entre_pods "$SUBACCION" "${INPUT[2]}"
-            ;;
-        version)
-            echo "K3s Manager versión: $VERSION"
-            comprobar_actualizacion
-            ;;
-        update)
-            actualizar_k3smanager
-            if [ $? -eq 0 ]; then
-                echo "Reiniciando el script..."
-                export REINICIANDO_K3SMANAGER=true
-                exec "$0" "$@"
-            fi
-            ;;
-        help)
-            mostrar_ayuda "$SUBACCION"
-            ;;
-        exit|quit)
-            echo "Saliendo de K3s Manager. ¡Hasta luego!"
-            exit 0
-            ;;
-        *)
-            echo "Comando no reconocido: '$COMANDO'. Escribe 'help' para ver los comandos disponibles."
-            ;;
-    esac
+    comandos "$COMANDO" "$SUBACCION" "$ARGUMENTOS"
 done
