@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import os
+import pwd
 import re
+import shutil
 import subprocess
 import threading
 import tkinter as tk
@@ -13,21 +15,22 @@ import json
 
 # Comprobar si se ha pasado el argumento JSON por la línea de comandos de forma segura
 if len(sys.argv) > 1:
-    json_string = sys.argv[1]
-    try:
-        data = json.loads(json_string)
-        if not isinstance(data, (dict, list)):
-            data = {}
-    except (json.JSONDecodeError, TypeError):
-        data = {}
-else:
-    # Comportamiento por defecto si se abre de forma independiente
+  json_string = sys.argv[1]
+  try:
+    data = json.loads(json_string)
+    if not isinstance(data, (dict, list)):
+      data = {}
+  except (json.JSONDecodeError, TypeError):
     data = {}
-    print("[i] Abriendo K3s Manager GUI sin datos externos (modo independiente).")
+else:
+  # Comportamiento por defecto si se abre de forma independiente
+  data = {}
+  print("[i] Abriendo K3s Manager GUI sin datos externos (modo independiente).")
 
 # Archivo de script requerido
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_BASH = os.path.join(BASE_DIR, "k3smanager.sh")
+
 
 def insertar_texto_ansi(widget_text, texto):
   """Interpreta códigos de escape ANSI básicos y de 256 colores para Tkinter ScrolledText."""
@@ -155,10 +158,46 @@ class RoundedButton(tk.Canvas):
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
-        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
-        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
-        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
+        x1 + r,
+        y1,
+        x1 + r,
+        y1,
+        x2 - r,
+        y1,
+        x2 - r,
+        y1,
+        x2,
+        y1,
+        x2,
+        y1 + r,
+        x2,
+        y1 + r,
+        x2,
+        y2 - r,
+        x2,
+        y2 - r,
+        x2,
+        y2,
+        x2 - r,
+        y2,
+        x2 - r,
+        y2,
+        x1 + r,
+        y2,
+        x1 + r,
+        y2,
+        x1,
+        y2,
+        x1,
+        y2 - r,
+        x1,
+        y2 - r,
+        x1,
+        y1 + r,
+        x1,
+        y1 + r,
+        x1,
+        y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -265,10 +304,46 @@ class RoundedEntry(tk.Canvas):
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
-        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
-        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
-        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
+        x1 + r,
+        y1,
+        x1 + r,
+        y1,
+        x2 - r,
+        y1,
+        x2 - r,
+        y1,
+        x2,
+        y1,
+        x2,
+        y1 + r,
+        x2,
+        y1 + r,
+        x2,
+        y2 - r,
+        x2,
+        y2 - r,
+        x2,
+        y2,
+        x2 - r,
+        y2,
+        x2 - r,
+        y2,
+        x1 + r,
+        y2,
+        x1 + r,
+        y2,
+        x1,
+        y2,
+        x1,
+        y2 - r,
+        x1,
+        y2 - r,
+        x1,
+        y1 + r,
+        x1,
+        y1 + r,
+        x1,
+        y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -356,10 +431,46 @@ class RoundedLabelFrame(tk.Frame):
 
   def create_rounded_rect(self, canvas, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1,
-        x2, y1 + r, x2, y1 + r, x2, y2 - r, x2, y2 - r, x2, y2,
-        x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2, x1, y2,
-        x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
+        x1 + r,
+        y1,
+        x1 + r,
+        y1,
+        x2 - r,
+        y1,
+        x2 - r,
+        y1,
+        x2,
+        y1,
+        x2,
+        y1 + r,
+        x2,
+        y1 + r,
+        x2,
+        y2 - r,
+        x2,
+        y2 - r,
+        x2,
+        y2,
+        x2 - r,
+        y2,
+        x2 - r,
+        y2,
+        x1 + r,
+        y2,
+        x1 + r,
+        y2,
+        x1,
+        y2,
+        x1,
+        y2 - r,
+        x1,
+        y2 - r,
+        x1,
+        y1 + r,
+        x1,
+        y1 + r,
+        x1,
+        y1,
     ]
     return canvas.create_polygon(points, smooth=True, **kwargs)
 
@@ -385,10 +496,7 @@ class K3sManagerGUI:
     self.consola_auditoria = None
     self.consola_terminal_tab = None
 
-    # Directorio de trabajo actual para simular shell persistente
     self.current_working_dir = os.path.expanduser("~")
-
-    # Lista de comandos disponibles para autocompletado en la terminal (usando el diccionario 'data' ya parseado)
     self.comandos_completado = data if isinstance(data, (list, dict)) else {}
 
     self.style = ttk.Style()
@@ -432,7 +540,7 @@ class K3sManagerGUI:
     self.tabs_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
 
     self.frames = {}
-    for name in ("pods", "red", "auditoria", "terminal", "ayuda"):
+    for name in ("pods", "red", "auditoria", "ayuda"):
       f = tk.Frame(self.tabs_frame, bg=self.bg_window)
       self.frames[name] = f
 
@@ -441,7 +549,6 @@ class K3sManagerGUI:
         ("pods", " 📦 Gestión de Pods "),
         ("red", " 🌐 Red y Puertos "),
         ("auditoria", " 🛡️ Auditoría y Sistema "),
-        ("terminal", " 💻 TERM "),
         ("ayuda", " 📖 Ayuda & Creators "),
     ]
 
@@ -462,10 +569,25 @@ class K3sManagerGUI:
       btn.pack(side=tk.LEFT, padx=4)
       self.tab_buttons[key] = btn
 
+    # Botón TERM que abre una terminal externa con bash o zsh según tu configuración
+    btn_term = RoundedButton(
+        nav_container,
+        text=" 💻 TERM ",
+        command=self.abrir_terminal_externa,
+        width=175,
+        height=38,
+        radius=14,
+        bg_color="#161e2e",
+        hover_color="#1e293b",
+        fg_color=self.text_muted,
+        hover_fg=self.accent,
+        bg_canvas=self.bg_window,
+    )
+    btn_term.pack(side=tk.LEFT, padx=4)
+
     self.crear_pestana_pods()
     self.crear_pestana_red()
     self.crear_pestana_auditoria()
-    self.crear_pestana_terminal()
     self.crear_pestana_ayuda()
 
     self.mostrar_pestana("pods")
@@ -484,6 +606,47 @@ class K3sManagerGUI:
       )
 
     self.actualizar_lista_pods()
+
+  def obtener_shell_configurada(self):
+    shell_path = os.environ.get("SHELL", "")
+    if not shell_path:
+      try:
+        shell_path = pwd.getpwuid(os.getuid()).pw_shell
+      except Exception:
+        shell_path = "/bin/bash"
+
+    shell_name = os.path.basename(shell_path).lower()
+    if "zsh" in shell_name and shutil.which("zsh"):
+      return shutil.which("zsh") or "/bin/zsh"
+    if "bash" in shell_name and shutil.which("bash"):
+      return shutil.which("bash") or "/bin/bash"
+    return shutil.which(shell_name) or "/bin/bash"
+
+  def abrir_terminal_externa(self):
+    shell_cmd = self.obtener_shell_configurada()
+    terminales = [
+        ("x-terminal-emulator", ["x-terminal-emulator", "-e", shell_cmd]),
+        ("gnome-terminal", ["gnome-terminal", "--", shell_cmd]),
+        ("konsole", ["konsole", "-e", shell_cmd]),
+        ("xfce4-terminal", ["xfce4-terminal", "-e", shell_cmd]),
+        ("alacritty", ["alacritty", "-e", shell_cmd]),
+        ("kitty", ["kitty", shell_cmd]),
+        ("tilix", ["tilix", "-e", shell_cmd]),
+        ("xterm", ["xterm", "-e", shell_cmd]),
+    ]
+    for bin_name, cmd_args in terminales:
+      if shutil.which(bin_name):
+        subprocess.Popen(
+            cmd_args,
+            cwd=self.current_working_dir,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    messagebox.showerror(
+        "Error", "No se encontró un emulador de terminal gráfico disponible."
+    )
 
   def mostrar_pestana(self, name):
     for k, frame in self.frames.items():
@@ -968,230 +1131,6 @@ class K3sManagerGUI:
 
     self.consola_auditoria = self.crear_consola(frame)
 
-  def crear_pestana_terminal(self):
-    frame = self.frames["terminal"]
-
-    terminal_card = RoundedLabelFrame(
-        frame,
-        text=" 💻 TERM - K3s & Sistema Operativo ",
-        radius=16,
-        bg_canvas=self.bg_window,
-        padding=12,
-    )
-    terminal_card.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-    terminal_inner = terminal_card.inner_frame
-    terminal_inner.pack(fill=tk.BOTH, expand=True)
-
-    top_term_frame = tk.Frame(terminal_inner, bg=self.bg_card)
-    top_term_frame.pack(fill=tk.BOTH, expand=True)
-
-    self.consola_terminal_tab = scrolledtext.ScrolledText(
-        top_term_frame,
-        wrap=tk.WORD,
-        bg="#0f172a",
-        fg="#f8fafc",
-        insertbackground="#38bdf8",
-        font=("Consolas", 10),
-        borderwidth=0,
-        highlightthickness=0,
-    )
-    self.consola_terminal_tab.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    self.consola_terminal_tab.config(state=tk.DISABLED)
-
-    scrollbar = ttk.Scrollbar(
-        top_term_frame,
-        orient=tk.VERTICAL,
-        command=self.consola_terminal_tab.yview,
-    )
-    self.consola_terminal_tab.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    banner_p10k = (
-        "┌──────────────────────────────────────────────────────────────┐\n"
-        "│   TERM Interactiva K3s/Sistema   󱃾 k3s-cluster            │\n"
-        "└──────────────────────────────────────────────────────────────┘\n"
-        "➜  ~ [Usa la tecla TAB para autocompletar comandos]\n"
-    )
-    insertar_texto_ansi(self.consola_terminal_tab, banner_p10k)
-
-    input_frame = tk.Frame(terminal_inner, bg=self.bg_card)
-    input_frame.pack(fill=tk.X, pady=(8, 2))
-
-    tk.Label(
-        input_frame,
-        text="❯",
-        bg=self.bg_card,
-        fg="#38bdf8",
-        font=("Consolas", 12, "bold"),
-    ).pack(side=tk.LEFT, padx=(2, 6))
-
-    self.entry_terminal_cmd = RoundedEntry(
-        input_frame, width=700, height=38, radius=10, bg_canvas=self.bg_card
-    )
-    self.entry_terminal_cmd.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
-
-    # Bindings para Enter y autocompletar con Tab
-    self.entry_terminal_cmd.entry.bind(
-        "<Return>", lambda event: self.ejecutar_comando_terminal_seguro()
-    )
-    self.entry_terminal_cmd.entry.bind("<Tab>", self.autocompletar_comando)
-
-    RoundedButton(
-        input_frame,
-        text="▶ Ejecutar",
-        command=self.ejecutar_comando_terminal_seguro,
-        width=120,
-        height=36,
-        radius=10,
-        bg_color="#0369a1",
-        hover_color="#0ea5e9",
-        bg_canvas=self.bg_card,
-    ).pack(side=tk.LEFT, padx=(8, 2))
-
-    btn_bottom_frame = tk.Frame(terminal_inner, bg=self.bg_card)
-    btn_bottom_frame.pack(fill=tk.X, pady=4)
-
-    def limpiar_term():
-      self.consola_terminal_tab.config(state=tk.NORMAL)
-      self.consola_terminal_tab.delete("1.0", tk.END)
-      self.consola_terminal_tab.config(state=tk.DISABLED)
-      insertar_texto_ansi(self.consola_terminal_tab, "➜  ~ ")
-
-    RoundedButton(
-        btn_bottom_frame,
-        text="🧹 Limpiar Terminal",
-        command=limpiar_term,
-        width=150,
-        height=28,
-        radius=8,
-        bg_color="#1e293b",
-        hover_color="#ef4444",
-        bg_canvas=self.bg_card,
-    ).pack(side=tk.RIGHT, padx=2)
-
-  def autocompletar_comando(self, event=None):
-    """Lógica para autocompletar comandos mediante la tecla Tab."""
-    texto_actual = self.entry_terminal_cmd.get().strip()
-    if not texto_actual:
-      return "break"
-
-    coincidencias = [
-        c for c in self.comandos_completado if c.startswith(texto_actual)
-    ]
-
-    if len(coincidencias) == 1:
-      self.entry_terminal_cmd.delete(0, tk.END)
-      self.entry_terminal_cmd.insert(0, coincidencias[0])
-    elif len(coincidencias) > 1:
-      insertar_texto_ansi(
-          self.consola_terminal_tab,
-          f"\n➜  ~ {texto_actual}\nSugerencias: {', '.join(coincidencias)}",
-      )
-      insertar_texto_ansi(self.consola_terminal_tab, f"➜  ~ {texto_actual}")
-
-    return "break"
-
-  def ejecutar_comando_terminal_seguro(self):
-    cmd = self.entry_terminal_cmd.get().strip()
-    if not cmd:
-      return
-
-    self.entry_terminal_cmd.delete(0, tk.END)
-    insertar_texto_ansi(self.consola_terminal_tab, f"\n➜  ~ {cmd}\n")
-
-    if cmd.lower() in ["exit"]:
-      insertar_texto_ansi(
-          self.consola_terminal_tab,
-          "Sesión de terminal cerrada.\n➜  ~ ",
-      )
-      return
-
-    if cmd.lower() == "clear":
-      self.consola_terminal_tab.config(state=tk.NORMAL)
-      self.consola_terminal_tab.delete("1.0", tk.END)
-      self.consola_terminal_tab.config(state=tk.DISABLED)
-      insertar_texto_ansi(self.consola_terminal_tab, "➜  ~ ")
-      return
-
-    # Manejo nativo y seguro para el comando 'cd' para cambiar de directorio con persistencia
-    if cmd.startswith("cd "):
-      nuevo_dir = cmd[3:].strip()
-      try:
-        if nuevo_dir == "~" or not nuevo_dir:
-          target_path = os.path.expanduser("~")
-        elif nuevo_dir.startswith("~"):
-          target_path = os.path.expanduser(nuevo_dir)
-        else:
-          target_path = os.path.abspath(
-              os.path.join(self.current_working_dir, nuevo_dir)
-          )
-
-        if os.path.isdir(target_path):
-          self.current_working_dir = target_path
-          insertar_texto_ansi(
-              self.consola_terminal_tab, f"Directorio actual: {target_path}\n"
-          )
-        else:
-          insertar_texto_ansi(
-              self.consola_terminal_tab, f"cd: {nuevo_dir}: No existe la ruta\n"
-          )
-      except Exception as e:
-        insertar_texto_ansi(
-            self.consola_terminal_tab, f"cd: error al cambiar directorio: {e}\n"
-        )
-      insertar_texto_ansi(self.consola_terminal_tab, "➜  ~ ")
-      return
-
-    def tarea():
-      try:
-        # Preparamos la ejecución traduciendo atajos o scripts de k3smanager
-        comando_a_ejecutar = cmd
-        if not cmd.startswith("/") and not cmd.startswith("bash"):
-          # Si el comando es una opción reconocida del gestor, la enrutamos al script bash
-          opciones_manager = data if isinstance(data, (list, dict)) else {}
-          primer_token = cmd.split()[0] if cmd else ""
-          if primer_token in opciones_manager and os.path.exists(SCRIPT_BASH):
-            comando_a_ejecutar = f"bash {SCRIPT_BASH} {cmd}"
-
-        process = subprocess.Popen(
-            comando_a_ejecutar,
-            shell=True,
-            cwd=self.current_working_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-        )
-
-        while True:
-          line = process.stdout.readline()
-          if not line and process.poll() is not None:
-            break
-          if line:
-            limpia = limpiar_ansi(line)
-
-            def escribir_hilo(d=limpia):
-              insertar_texto_ansi(self.consola_terminal_tab, d)
-
-            self.root.after(0, escribir_hilo)
-
-        process.wait()
-      except Exception as e:
-
-        def error_hilo():
-          insertar_texto_ansi(
-              self.consola_terminal_tab, f"Error al ejecutar: {str(e)}\n"
-          )
-
-        self.root.after(0, error_hilo)
-
-      self.root.after(
-          0, lambda: insertar_texto_ansi(self.consola_terminal_tab, "➜  ~ ")
-      )
-
-    threading.Thread(target=tarea, daemon=True).start()
-
   def crear_pestana_ayuda(self):
     frame = self.frames["ayuda"]
 
@@ -1585,3 +1524,4 @@ if __name__ == "__main__":
   root = tk.Tk()
   app = K3sManagerGUI(root)
   root.mainloop()
+
