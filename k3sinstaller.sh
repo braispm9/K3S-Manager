@@ -88,7 +88,9 @@ select_mode() {
 # --- UPDATE INSTALLER ITSELF ---
 update_self() {
     echo "Updating installer script from GitHub - 701v"
-    RAW_URL_INSTALLER="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3sinstallerALL.sh"
+    # Añadimos ?v=$(date +%s) para evitar que GitHub sirva una versión en caché
+    RAW_URL_INSTALLER="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3sinstallerALL.sh?v=$(date +%s)"
+    
     if curl -fsSL "$RAW_URL_INSTALLER" -o "$SELF_PATH"; then
         chmod +x "$SELF_PATH"
         echo "Installer successfully updated. Please re-run it. - 702v"
