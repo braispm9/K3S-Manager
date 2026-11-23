@@ -7,11 +7,12 @@ INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
+DESTINO_UNINSTALLER="${INSTALL_DIR}/k3suninstaller.sh"
 
 show_version() {
     cat << EOF
 =====================================================
- K3s Manager Installer - Version $INSTALLER_VERSION
+ K3s Manager Master Installer - Version $INSTALLER_VERSION
 =====================================================
 Repository User: $GITHUB_USER | Repo: $REPO_NAME | Branch: $BRANCH
 CLI Component:   $SCRIPT_NAME
@@ -22,10 +23,10 @@ EOF
 show_help() {
     cat << EOF
 =====================================================
- K3s Manager Installer - Help
+ K3s Manager Master Installer - Help
 =====================================================
-Usage: ./k3sinstaller.sh [OPTION]
-  (no args)  Interactive installation
+Usage: sudo ./k3sinstallerALL.sh [OPTION]
+  (no args)  Interactive full installation & deployment
   cli        Install CLI only
   gui        Install GUI only
   -v         Show version
@@ -205,6 +206,33 @@ EOF
     chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null && echo "Shortcuts configured - 501v" || { echo "Shortcuts configuration failed - 501x"; exit 1; }
 }
 
+# --- DEPLOY UNINSTALLER GENERATOR ---
+deploy_uninstaller() {
+    cat << 'EOF' > "$DESTINO_UNINSTALLER"
+#!/bin/bash
+if [ "$EUID" -ne 0 ]; then
+    echo "Administrator privileges required for uninstallation - 901x"
+    exit 1
+fi
+
+echo "Uninstalling K3s Manager components - 902v"
+systemctl stop k3s >/dev/null 2>&1
+/usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1
+
+rm -f /usr/local/bin/k3smanager \
+      /usr/local/bin/k3smanager.sh \
+      /usr/local/bin/k3smanager-gui \
+      /usr/local/bin/k3sinstaller \
+      /usr/local/bin/k3sinstaller.sh \
+      /usr/local/bin/k3suninstaller.sh
+
+echo "Uninstallation completed successfully - 903v"
+EOF
+    chmod +x "$DESTINO_UNINSTALLER"
+    chown root:root "$DESTINO_UNINSTALLER"
+    echo "Uninstaller deployed - 450v"
+}
+
 # --- FINAL SUCCESS MESSAGE ---
 final_message() {
     echo "Installation completed successfully - 601v"
@@ -218,9 +246,17 @@ final_message() {
     if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
         echo "GUI Component installed - 603v"
     fi
+    echo "Uninstaller ready: sudo k3suninstaller.sh"
 }
 
 # --- EXECUTION FLOW ---
+
+# Ensure root privileges first
+if [ "$EUID" -ne 0 ]; then
+    echo "Administrator privileges required - 101x"
+    echo "Please run: sudo ./k3sinstallerALL.sh"
+    exit 1
+fi
 
 # Handle command-line options
 if [ $# -gt 0 ]; then
@@ -233,16 +269,15 @@ if [ $# -gt 0 ]; then
             show_help
             exit 0
             ;;
+        cli)
+            INSTALL_MODE="cli"
+            ;;
+        gui)
+            INSTALL_MODE="gui"
+            ;;
     esac
 else
     select_mode
-fi
-
-# Ensure root privileges
-if [ "$EUID" -ne 0 ]; then
-    echo "Administrator privileges required - 101x"
-    echo "Please run: sudo ./k3sinstaller.sh"
-    exit 1
 fi
 
 # Resolve real system user (avoiding root home issues)
@@ -256,11 +291,12 @@ fi
 
 echo "Installing for system user: $REAL_USER - 102v"
 
-# Run installation pipeline
+# Run full installation pipeline
 clean_installation
 install_dependencies
 network_config
 kubeconfig_config
 components_download
 alias_config
+deploy_uninstaller
 final_message
