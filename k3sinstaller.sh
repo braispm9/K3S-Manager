@@ -2,12 +2,13 @@
 
 # --- CONFIGURATION ---
 GITHUB_USER="braispm9"; REPO_NAME="K3S-Manager"; BRANCH="main"
-SCRIPT_NAME="k3smanager.sh"; GUI_SCRIPT_NAME="k3smanager-gui.py"; INSTALLER_VERSION="1.9"
+SCRIPT_NAME="k3smanager.sh"; GUI_SCRIPT_NAME="k3smanager-gui.py"; INSTALLER_VERSION="2.0"
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
 DESTINO_UNINSTALLER="${INSTALL_DIR}/k3suninstaller.sh"
+SELF_PATH="$(readlink -f "$0")"
 
 show_version() {
     cat << EOF
@@ -15,8 +16,6 @@ show_version() {
  K3s Manager Master Installer - Version $INSTALLER_VERSION
 =====================================================
 Repository User: $GITHUB_USER | Repo: $REPO_NAME | Branch: $BRANCH
-CLI Component:   $SCRIPT_NAME
-GUI Component:   $GUI_SCRIPT_NAME
 EOF
 }
 
@@ -26,36 +25,95 @@ show_help() {
  K3s Manager Master Installer - Help
 =====================================================
 Usage: sudo ./k3sinstallerALL.sh [OPTION]
-  (no args)  Interactive full installation & deployment
-  cli        Install CLI only
-  gui        Install GUI only
+  (no args)  Interactive management menu
   -v         Show version
   -h         Show help
 EOF
 }
 
 select_mode() {
-    read -e -p "Select option (1-4) [1) CLI, 2) GUI, 3) Both, 4) Cancel]: " opcion
+    echo "====================================================="
+    echo " K3s Manager Management Menu"
+    echo "====================================================="
+    echo "1) Install CLI only"
+    echo "2) Install GUI (includes CLI)"
+    echo "3) Update Installer itself"
+    echo "4) Update / Redownload component files"
+    echo "5) Remove installers, scripts & aliases only"
+    echo "6) Complete purge (Remove everything including K3s)"
+    echo "7) Cancel"
+    echo "====================================================="
+    read -e -p "Select option (1-7): " opcion
     case $opcion in
         1) INSTALL_MODE="cli" ;;
         2) INSTALL_MODE="gui" ;;
-        3) INSTALL_MODE="both" ;;
-        4) echo "Installation cancelled. - 100v" && exit 0 ;;
+        3) update_self && exit 0 ;;
+        4) update_files && exit 0 ;;
+        5) remove_installers_and_aliases && exit 0 ;;
+        6) complete_purge && exit 0 ;;
+        7) echo "Operation cancelled. - 100v" && exit 0 ;;
         *) echo "Invalid option. Please try again. - 100x" && select_mode ;;
     esac
 }
 
-# --- CLEAN PREVIOUS INSTALLATIONS ---
-clean_installation() {
-    rm -f "$DESTINO_CLI" "$DESTINO_SH" "$DESTINO_GUI" "${DESTINO_GUI}.py" "$REAL_HOME/.k3smanager_history" "$REAL_HOME/conexion.log" "$REAL_HOME/monitor_connect.log"
-    echo "Previous installations cleaned - 103v"
+# --- UPDATE INSTALLER ITSELF ---
+update_self() {
+    echo "Updating installer script from GitHub - 701v"
+    RAW_URL_INSTALLER="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3sinstallerALL.sh"
+    if curl -fsSL "$RAW_URL_INSTALLER" -o "$SELF_PATH"; then
+        chmod +x "$SELF_PATH"
+        echo "Installer successfully updated. Please re-run it. - 702v"
+    else
+        echo "Failed to update installer from repository. - 701x"
+        exit 1
+    fi
+}
+
+# --- UPDATE COMPONENT FILES ---
+update_files() {
+    echo "Updating component files from GitHub - 711v"
+    RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
+    RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
+    
+    curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI" && cp "$DESTINO_CLI" "$DESTINO_SH"
+    curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
+    
+    chmod +x "$DESTINO_CLI" "$DESTINO_SH" "$DESTINO_GUI" 2>/dev/null
+    echo "Component files successfully updated. - 712v"
+}
+
+# --- REMOVE INSTALLERS, SCRIPTS & ALIASES ---
+remove_installers_and_aliases() {
+    echo "Cleaning up installers, scripts, and shell aliases - 801v"
+    rm -f "$DESTINO_CLI" "$DESTINO_SH" "$DESTINO_GUI" "${DESTINO_GUI}.py" "$DESTINO_UNINSTALLER" \
+          "$REAL_HOME/.k3smanager_history" "$REAL_HOME/conexion.log" "$REAL_HOME/monitor_connect.log"
     
     for rc_file in "$REAL_HOME/.zshrc" "$REAL_HOME/.bashrc"; do
         if [ -f "$rc_file" ]; then
             sed -i.bak -e '/alias k3smanager=/d' -e '/alias k3smanager-gui=/d' -e '/export KUBECONFIG/d' -e '/# --- K3s Manager Shortcuts & Environment ---/d' "$rc_file" 2>/dev/null
-            echo "Shell configuration cleaned - 104v"
         fi
     done
+    echo "Installers and aliases removed successfully. - 802v"
+}
+
+# --- COMPLETE PURGE (INCLUDING K3S) ---
+complete_purge() {
+    echo "Executing complete system purge including K3s - 901v"
+    if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
+        /usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1
+    elif [ -f /usr/bin/k3s-uninstall.sh ]; then
+        /usr/bin/k3s-uninstall.sh >/dev/null 2>&1
+    fi
+    systemctl stop k3s >/dev/null 2>&1
+    systemctl disable k3s >/dev/null 2>&1
+    rm -rf /etc/rancher /var/lib/rancher ~/.kube
+    remove_installers_and_aliases
+    echo "Complete system purge finished. - 902v"
+}
+
+# --- CLEAN PREVIOUS INSTALLATIONS ---
+clean_installation() {
+    remove_installers_and_aliases
 }
 
 # --- DEPENDENCIES & KUBERNETES ---
@@ -156,7 +214,7 @@ components_download() {
     RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
     RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
     
-    if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
+    if [ "$INSTALL_MODE" == "cli" ]; then
         echo "Downloading CLI component - 401v"
         curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI" && cp "$DESTINO_CLI" "$DESTINO_SH"
     
@@ -168,12 +226,17 @@ components_download() {
             echo "CLI download failed - 401x"
             exit 1
         fi
-    fi
-    
-    if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
-        echo "Downloading GUI component - 403v"
+    elif [ "$INSTALL_MODE" == "gui" ]; then
+        echo "Downloading CLI & GUI components - 403v"
+        curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI" && cp "$DESTINO_CLI" "$DESTINO_SH"
         curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
     
+        if [ -s "$DESTINO_CLI" ]; then
+            chmod +x "$DESTINO_CLI" "$DESTINO_SH"
+            chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI" "$DESTINO_SH"
+            echo "CLI component installed - 402v"
+        fi
+
         if [ -s "$DESTINO_GUI" ]; then
             chmod +x "$DESTINO_GUI"
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
@@ -195,42 +258,25 @@ alias_config() {
     fi
     
     echo "Configuring shortcuts and environment - 501v"
-    cat << 'EOF' >> "$RC_FILE"
+    
+    if [ "$INSTALL_MODE" == "cli" ]; then
+        cat << 'EOF' >> "$RC_FILE"
+
+# --- K3s Manager Shortcuts & Environment ---
+export KUBECONFIG="$HOME/.kube/config"
+alias k3smanager='k3smanager'
+EOF
+    elif [ "$INSTALL_MODE" == "gui" ]; then
+        cat << 'EOF' >> "$RC_FILE"
 
 # --- K3s Manager Shortcuts & Environment ---
 export KUBECONFIG="$HOME/.kube/config"
 alias k3smanager='k3smanager'
 alias k3smanager-gui='nohup python3 /usr/local/bin/k3smanager-gui > "$HOME/k3s_gui_error.log" 2>&1 & disown'
 EOF
+    fi
     
     chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null && echo "Shortcuts configured - 501v" || { echo "Shortcuts configuration failed - 501x"; exit 1; }
-}
-
-# --- DEPLOY UNINSTALLER GENERATOR ---
-deploy_uninstaller() {
-    cat << 'EOF' > "$DESTINO_UNINSTALLER"
-#!/bin/bash
-if [ "$EUID" -ne 0 ]; then
-    echo "Administrator privileges required for uninstallation - 901x"
-    exit 1
-fi
-
-echo "Uninstalling K3s Manager components - 902v"
-systemctl stop k3s >/dev/null 2>&1
-/usr/local/bin/k3s-uninstall.sh >/dev/null 2>&1
-
-rm -f /usr/local/bin/k3smanager \
-      /usr/local/bin/k3smanager.sh \
-      /usr/local/bin/k3smanager-gui \
-      /usr/local/bin/k3sinstaller \
-      /usr/local/bin/k3sinstaller.sh \
-      /usr/local/bin/k3suninstaller.sh
-
-echo "Uninstallation completed successfully - 903v"
-EOF
-    chmod +x "$DESTINO_UNINSTALLER"
-    chown root:root "$DESTINO_UNINSTALLER"
-    echo "Uninstaller deployed - 450v"
 }
 
 # --- FINAL SUCCESS MESSAGE ---
@@ -239,14 +285,12 @@ final_message() {
     echo "You can now use the tool by opening a new terminal or running:"
     echo "source $RC_FILE"
     
-    if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
+    if [ "$INSTALL_MODE" == "cli" ]; then
         echo "CLI Component installed - 602v"
-    fi
-    
-    if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
+    elif [ "$INSTALL_MODE" == "gui" ]; then
+        echo "CLI Component installed - 602v"
         echo "GUI Component installed - 603v"
     fi
-    echo "Uninstaller ready: sudo k3suninstaller.sh"
 }
 
 # --- EXECUTION FLOW ---
@@ -298,5 +342,4 @@ network_config
 kubeconfig_config
 components_download
 alias_config
-deploy_uninstaller
 final_message
