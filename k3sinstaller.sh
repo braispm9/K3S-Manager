@@ -1,222 +1,84 @@
 #!/bin/bash
 
-# --- CONFIGURACIÓN DEL REPOSITORIO ---
-GITHUB_USER="braispm9"
-REPO_NAME="K3S-Manager"
-BRANCH="main"
-SCRIPT_NAME="k3smanager.sh"
-GUI_SCRIPT_NAME="k3smanager-gui.py"
-INSTALLER_VERSION="1.9"
-
-# Directorio de instalación global recomendado para scripts ejecutables de usuario
+# --- CONFIGURATION ---
+GITHUB_USER="braispm9"; REPO_NAME="K3S-Manager"; BRANCH="main"
+SCRIPT_NAME="k3smanager.sh"; GUI_SCRIPT_NAME="k3smanager-gui.py"; INSTALLER_VERSION="1.9"
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
 DESTINO_GUI="${INSTALL_DIR}/k3smanager-gui"
 
-# --- FUNCIÓN PARA MOSTRAR VERSIÓN ---
-mostrar_version() {
-    echo "====================================================="
-    echo " K3s Manager Installer - Versión $INSTALLER_VERSION"
-    echo "====================================================="
-    echo ""
-    echo "Información del Instalador:"
-    echo "  • Usuario del repositorio: $GITHUB_USER"
-    echo "  • Nombre del repositorio:  $REPO_NAME"
-    echo "  • Rama por defecto:        $BRANCH"
-    echo ""
-    echo "Componentes disponibles:"
-    echo "  • CLI (Terminal):  $SCRIPT_NAME"
-    echo "  • GUI (Gráfica):   $GUI_SCRIPT_NAME"
-    echo ""
-    echo "Uso:"
-    echo "  • Instalación interactiva: sudo ./k3sinstaller.sh"
-    echo "  • Instalar solo CLI:       sudo ./k3sinstaller.sh cli"
-    echo "  • Instalar solo GUI:       sudo ./k3sinstaller.sh gui"
-    echo "  • Ver versión:             ./k3sinstaller.sh -v"
-    echo "  • Ver ayuda:               ./k3sinstaller.sh -h"
-    echo ""
+show_version() {
+    cat << EOF
+=====================================================
+ K3s Manager Installer - Version $INSTALLER_VERSION
+=====================================================
+Repository User: $GITHUB_USER | Repo: $REPO_NAME | Branch: $BRANCH
+CLI Component:   $SCRIPT_NAME
+GUI Component:   $GUI_SCRIPT_NAME
+EOF
 }
 
-# --- FUNCIÓN PARA MOSTRAR AYUDA ---
-mostrar_ayuda() {
-    echo "====================================================="
-    echo " K3s Manager Installer - Ayuda"
-    echo "====================================================="
-    echo ""
-    echo "Uso: ./k3sinstaller.sh [OPCIÓN]"
-    echo ""
-    echo "Opciones:"
-    echo "  (sin argumentos)  Instalación interactiva (pregunta qué instalar)"
-    echo "  cli               Instala solo la interfaz CLI (terminal)"
-    echo "  gui               Instala solo la interfaz GUI (gráfica)"
-    echo "  -v, --version     Muestra la versión del instalador"
-    echo "  -h, --help        Muestra este mensaje de ayuda"
-    echo ""
-    echo "Ejemplos:"
-    echo "  sudo ./k3sinstaller.sh           # Modo interactivo"
-    echo "  sudo ./k3sinstaller.sh cli       # Solo CLI"
-    echo "  sudo ./k3sinstaller.sh gui       # Solo GUI"
-    echo "  ./k3sinstaller.sh -v             # Ver versión"
-    echo ""
+show_help() {
+    cat << EOF
+=====================================================
+ K3s Manager Installer - Help
+=====================================================
+Usage: ./k3sinstaller.sh [OPTION]
+  (no args)  Interactive installation
+  cli        Install CLI only
+  gui        Install GUI only
+  -v         Show version
+  -h         Show help
+EOF
 }
 
-# --- FUNCIÓN PARA SELECCIONAR MODO INTERACTIVO ---
-seleccionar_modo() {
-    echo "====================================================="
-    echo " Instalador de K3s Manager"
-    echo "====================================================="
-    echo ""
-    echo "¿Qué deseas instalar?"
-    echo ""
-    echo "  1) CLI (Consola interactiva - terminal)"
-    echo "  2) GUI (Interfaz gráfica)"
-    echo "  3) Ambos (CLI + GUI)"
-    echo "  4) Cancelar"
-    echo ""
-    read -e -p "Selecciona una opción (1-4): " opcion
-
+select_mode() {
+    read -e -p "Select option (1-4) [1) CLI, 2) GUI, 3) Both, 4) Cancel]: " opcion
     case $opcion in
-        1)
-            INSTALL_MODE="cli"
-            ;;
-        2)
-            INSTALL_MODE="gui"
-            ;;
-        3)
-            INSTALL_MODE="both"
-            ;;
-        4)
-            echo "Instalación cancelada."
-            exit 0
-            ;;
-        *)
-            echo "Opción no válida. Por favor, selecciona 1, 2, 3 o 4."
-            seleccionar_modo
-            ;;
+        1) INSTALL_MODE="cli" ;;
+        2) INSTALL_MODE="gui" ;;
+        3) INSTALL_MODE="both" ;;
+        4) echo "Installation cancelled. - 100v" && exit 0 ;;
+        *) echo "Invalid option. Please try again. - 100x" && select_mode ;;
     esac
 }
 
-# --- FUNCIÓN PARA LIMPIAR INSTALACIONES PREVIAS ---
-limpiar_previos() {
-    echo -e "\n\033[1;33m[!] Limpiando instalaciones previas de K3s Manager...\033[0m"
-
-    # Eliminar archivos de instalación anteriores (incluyendo compatibilidad con versiones previas con .py)
-    if [ -f "$DESTINO_CLI" ]; then
-        rm -f "$DESTINO_CLI"
-        echo "    • Eliminado: $DESTINO_CLI"
-    fi
-
-    if [ -f "$DESTINO_SH" ]; then
-        rm -f "$DESTINO_SH"
-        echo "    • Eliminado: $DESTINO_SH"
-    fi
-
-    if [ -f "$DESTINO_GUI" ]; then
-        rm -f "$DESTINO_GUI"
-        echo "    • Eliminado: $DESTINO_GUI"
-    fi
-
-    if [ -f "${DESTINO_GUI}.py" ]; then
-        rm -f "${DESTINO_GUI}.py"
-        echo "    • Eliminado: ${DESTINO_GUI}.py"
-    fi
-
-    # Limpiar archivos de historial y temporales del usuario
-    if [ -f "$REAL_HOME/.k3smanager_history" ]; then
-        rm -f "$REAL_HOME/.k3smanager_history"
-        echo "    • Eliminado historial: $REAL_HOME/.k3smanager_history"
-    fi
-
-    # Eliminar conexion.log y monitor_connect.log si existen
-    if [ -f "$REAL_HOME/conexion.log" ]; then
-        rm -f "$REAL_HOME/conexion.log"
-        echo "    • Eliminado: $REAL_HOME/conexion.log"
-    fi
-
-    if [ -f "$REAL_HOME/monitor_connect.log" ]; then
-        rm -f "$REAL_HOME/monitor_connect.log"
-        echo "    • Eliminado: $REAL_HOME/monitor_connect.log"
-    fi
-
-    # Limpiar los aliases de .bashrc y .zshrc
-    USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
-
-    if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
-        if [ -f "$REAL_HOME/.zshrc" ]; then
-            sed -i.bak '/alias k3smanager=/d' "$REAL_HOME/.zshrc" 2>/dev/null
-            sed -i.bak '/alias k3smanager-gui=/d' "$REAL_HOME/.zshrc" 2>/dev/null
-            sed -i.bak '/export KUBECONFIG/d' "$REAL_HOME/.zshrc" 2>/dev/null
-            sed -i.bak '/# --- K3s Manager Shortcuts & Environment ---/d' "$REAL_HOME/.zshrc" 2>/dev/null
-            echo "    • Limpiados alias de: $REAL_HOME/.zshrc"
+# --- CLEAN PREVIOUS INSTALLATIONS ---
+clean_installation() {
+    rm -f "$DESTINO_CLI" "$DESTINO_SH" "$DESTINO_GUI" "${DESTINO_GUI}.py" "$REAL_HOME/.k3smanager_history" "$REAL_HOME/conexion.log" "$REAL_HOME/monitor_connect.log"
+    echo "Previous installations cleaned - 103v"
+    
+    for rc_file in "$REAL_HOME/.zshrc" "$REAL_HOME/.bashrc"; do
+        if [ -f "$rc_file" ]; then
+            sed -i.bak -e '/alias k3smanager=/d' -e '/alias k3smanager-gui=/d' -e '/export KUBECONFIG/d' -e '/# --- K3s Manager Shortcuts & Environment ---/d' "$rc_file" 2>/dev/null
+            echo "Shell configuration cleaned - 104v"
         fi
-    fi
-
-    if [ -f "$REAL_HOME/.bashrc" ]; then
-        sed -i.bak '/alias k3smanager=/d' "$REAL_HOME/.bashrc" 2>/dev/null
-        sed -i.bak '/alias k3smanager-gui=/d' "$REAL_HOME/.bashrc" 2>/dev/null
-        sed -i.bak '/export KUBECONFIG/d' "$REAL_HOME/.bashrc" 2>/dev/null
-        sed -i.bak '/# --- K3s Manager Shortcuts & Environment ---/d' "$REAL_HOME/.bashrc" 2>/dev/null
-        echo "    • Limpiados alias de: $REAL_HOME/.bashrc"
-    fi
-
-    echo -e "\033[1;32m[OK] Limpieza completada.\033[0m\n"
+    done
 }
 
-# --- FUNCIÓN PARA INSTALAR DEPENDENCIAS ---
-instalar_dependencias() {
-    echo -e "[1/4] Verificando e instalando dependencias del sistema..."
-
-    UTILS_DEBIAN="curl fzf tcpdump netcat-openbsd iproute2 python3 python3-tk"
-    UTILS_FEDORA="curl fzf tcpdump nc iproute python3 python3-tkinter"
-
-    if command -v apt &> /dev/null; then
-        echo "    • Sistema basado en Debian/Ubuntu detectado (apt)."
-        apt-get update -qq
-        apt-get install -y $UTILS_DEBIAN
-    elif command -v dnf &> /dev/null; then
-        echo "    • Sistema basado en Fedora detectado (dnf)."
-        dnf install -y $UTILS_FEDORA
-    elif command -v yum &> /dev/null; then
-        echo "    • Sistema basado en CentOS/RHEL detectado (yum)."
-        yum install -y $UTILS_FEDORA
-    else
-        echo -e "\n\033[1;31m[X] No se pudo detectar un gestor de paquetes compatible (apt, dnf, yum).\033[0m"
-        exit 1
-    fi
-}
-
-# --- FUNCIÓN PARA INSTALAR K3S Y KUBECTL ---
-instalar_kubernetes() {
-    echo -e "\n[2/4] Verificando Kubernetes (K3s y kubectl)..."
+# --- DEPENDENCIES & KUBERNETES ---
+install_dependencies() {
+    echo "Checking Kubernetes components"
+    
     if ! command -v kubectl &> /dev/null; then
-        echo "    • Instalando kubectl..."
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-        rm -f kubectl
+        echo "Installing kubectl - 201v"
+        curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm -f kubectl || { echo "kubectl install failed - 201x"; exit 1; }
     else
-        echo "    • kubectl ya está instalado."
+        echo "kubectl already installed - 202v"
     fi
-
-    echo "    • Instalando / Actualizando K3s servidor local..."
-
-    if ! curl -sfL https://get.k3s.io | sh -; then
-        echo "    • Instalador oficial falló. Aplicando instalación robusta manual..."
-    fi
-
-    if ! command -v k3s &> /dev/null; then
-        echo "    • Descargando binario de K3s manualmente..."
-        curl -sfL https://github.com/k3s-io/k3s/releases/latest/download/k3s -o /usr/local/bin/k3s
-        chmod +x /usr/local/bin/k3s
-    fi
-
+    
+    echo "Installing & Updating K3s local server - 203v"
+    curl -sfL https://get.k3s.io | sh - || echo "Official installer warning/failed - 203x"
+    
     if [ ! -f /etc/systemd/system/k3s.service ]; then
-        echo "    • Creando unidad systemd para K3s..."
+        echo "Creating K3s systemd unit - 204v"
         cat << 'EOF' > /etc/systemd/system/k3s.service
 [Unit]
 Description=Lightweight Kubernetes
 Documentation=https://k3s.io
-After=network-online.target firewalld.service
+After=network-online.target
 
 [Service]
 Type=notify
@@ -235,40 +97,39 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
     fi
-
-    systemctl daemon-reload
-    systemctl enable k3s >/dev/null 2>&1
-    systemctl restart k3s
+    
+    systemctl daemon-reload && systemctl enable --now k3s >/dev/null 2>&1 && echo "K3s service started - 205v" || { echo "K3s service failed - 205x"; exit 1; }
 }
 
-# --- FUNCIÓN PARA CONFIGURAR RED ---
-configurar_red() {
-    echo -e "\n[i] Configurando reenvío de IP y reglas de red/firewall para K3s..."
+# --- NETWORK & FIREWALL ---
+network_config() {
+    echo "Configuring IP forwarding and firewall rules"
+
     sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
     if ! grep -q "net.ipv4.ip_forward" /etc/sysctl.conf; then
         echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
     else
         sed -i 's/#*net.ipv4.ip_forward=.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
     fi
-    sysctl -p /etc/sysctl.conf >/dev/null 2>&1
-
+    sysctl -p /etc/sysctl.conf >/dev/null 2>&1 && echo "IP forwarding enabled - 301v" || { echo "IP forwarding failed - 301x"; exit 1; }
+    
     if command -v firewall-cmd &> /dev/null && systemctl is-active --quiet firewalld; then
-        echo "    • Configurando firewalld (Fedora/RHEL) para permitir interfaces de contenedores..."
+        echo "Configuring firewalld rules - 302v"
         firewall-cmd --permanent --add-interface=cni0 >/dev/null 2>&1
         firewall-cmd --permanent --add-interface=flannel.1 >/dev/null 2>&1
         firewall-cmd --permanent --zone=trusted --add-interface=cni0 >/dev/null 2>&1
         firewall-cmd --permanent --zone=trusted --add-interface=flannel.1 >/dev/null 2>&1
-        firewall-cmd --reload >/dev/null 2>&1
+        firewall-cmd --reload >/dev/null 2>&1 && echo "Firewalld configured - 302v" || { echo "Firewalld configuration failed - 302x"; exit 1; }
     elif command -v ufw &> /dev/null && ufw status | grep -q "Status: active"; then
-        echo "    • Ajustando política de reenvío en UFW (Debian/Ubuntu)..."
+        echo "Configuring UFW rules - 303v"
         sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw 2>/dev/null
-        ufw reload >/dev/null 2>&1
+        ufw reload >/dev/null 2>&1 && echo "UFW configured - 303v" || { echo "UFW configuration failed - 303x"; exit 1; }
     fi
 }
 
-# --- FUNCIÓN PARA CONFIGURAR KUBECONFIG ---
-configurar_kubeconfig() {
-    echo -e "\n[i] Configurando acceso sin sudo a Kubernetes para el usuario $REAL_USER..."
+# --- KUBECONFIG PERMISSIONS ---
+kubeconfig_config() {
+    echo "Configuring non-root user access to Kubernetes for $REAL_USER"
 
     local intentos=0
     while [ ! -f /etc/rancher/k3s/k3s.yaml ] && [ $intentos -lt 15 ]; do
@@ -283,59 +144,56 @@ configurar_kubeconfig() {
         chmod 600 "$REAL_HOME/.kube/config"
         chmod +x /etc/rancher 2>/dev/null
         chmod +rx /etc/rancher/k3s 2>/dev/null
-        echo "    • Kubeconfig copiado y configurado en '$REAL_HOME/.kube/config' (Acceso OK sin sudo)."
+        echo "Kubeconfig successfully configured - 351v"
     else
-        echo -e "\n\033[1;31m[X] Advertencia: No se pudo encontrar /etc/rancher/k3s/k3s.yaml. Revisa el estado con 'sudo systemctl status k3s'.\033[0m"
+        echo "Warning: Kubeconfig file not found. Check status with 'sudo systemctl status k3s' - 351x"
     fi
 }
 
-# --- FUNCIÓN PARA DESCARGAR E INSTALAR COMPONENTES ---
-descargar_componentes() {
-    echo -e "\n[3/4] Descargando componentes desde el repositorio..."
+# --- DOWNLOAD COMPONENTS ---
+components_download() {
     RAW_URL_CLI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${SCRIPT_NAME}"
     RAW_URL_GUI="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${GUI_SCRIPT_NAME}"
-
+    
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
-        curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI"
-        cp "$DESTINO_CLI" "$DESTINO_SH"
-
+        echo "Downloading CLI component - 401v"
+        curl -fsSL -o "$DESTINO_CLI" "$RAW_URL_CLI" && cp "$DESTINO_CLI" "$DESTINO_SH"
+    
         if [ -s "$DESTINO_CLI" ]; then
-            chmod +x "$DESTINO_CLI"
-            chmod +x "$DESTINO_SH"
-            chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI"
-            chown "$REAL_USER":"$REAL_USER" "$DESTINO_SH"
-            echo "    • Componente CLI instalado en: $DESTINO_CLI"
+            chmod +x "$DESTINO_CLI" "$DESTINO_SH"
+            chown "$REAL_USER":"$REAL_USER" "$DESTINO_CLI" "$DESTINO_SH"
+            echo "CLI component installed - 402v"
         else
-            echo -e "\n\033[1;31m[X] Error: No se pudo descargar el script CLI desde GitHub.\033[0m"
+            echo "CLI download failed - 401x"
             exit 1
         fi
     fi
-
+    
     if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
+        echo "Downloading GUI component - 403v"
         curl -fsSL -o "$DESTINO_GUI" "$RAW_URL_GUI"
-
+    
         if [ -s "$DESTINO_GUI" ]; then
             chmod +x "$DESTINO_GUI"
             chown "$REAL_USER":"$REAL_USER" "$DESTINO_GUI"
-            echo "    • Componente GUI instalado en: $DESTINO_GUI"
+            echo "GUI component installed - 404v"
         else
-            echo "    • [Aviso] La interfaz gráfica (GUI) no se pudo descargar o aún no está publicada."
+            echo "GUI download failed or not published - 403x"
         fi
     fi
 }
 
-# --- FUNCIÓN PARA CONFIGURAR ALIASES ---
-configurar_aliases() {
-    echo -e "\n[4/4] Configurando accesos directos..."
+# --- SHELL ALIASES & ENVIRONMENT ---
+alias_config() {
     USER_SHELL=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f7)
-
+    
     if [[ "$USER_SHELL" =~ "zsh" ]] || [ -f "$REAL_HOME/.zshrc" ]; then
         RC_FILE="$REAL_HOME/.zshrc"
     else
         RC_FILE="$REAL_HOME/.bashrc"
     fi
-
-    # Se añade nohup, redirección de logs y desvinculación (&) para liberar la terminal al instante
+    
+    echo "Configuring shortcuts and environment - 501v"
     cat << 'EOF' >> "$RC_FILE"
 
 # --- K3s Manager Shortcuts & Environment ---
@@ -343,63 +201,51 @@ export KUBECONFIG="$HOME/.kube/config"
 alias k3smanager='k3smanager'
 alias k3smanager-gui='nohup python3 /usr/local/bin/k3smanager-gui > "$HOME/k3s_gui_error.log" 2>&1 & disown'
 EOF
-
-    chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null
+    
+    chown "$REAL_USER":"$REAL_USER" "$RC_FILE" 2>/dev/null && echo "Shortcuts configured - 501v" || { echo "Shortcuts configuration failed - 501x"; exit 1; }
 }
 
-# --- FUNCIÓN PARA MOSTRAR MENSAJE FINAL ---
-mensaje_final() {
-    echo -e "\n\033[1;32m==================================================\033[0m"
-    echo -e "\n\033[1;32m ¡Instalación completada con éxito!\033[0m"
-    echo -e "\n\033[1;32m==================================================\033[0m"
-    echo "Ya puedes utilizar la herramienta abriendo una nueva terminal"
-    echo "o ejecutando inmediatamente en tu consola actual:"
-    echo -e "  \033[1;33msource $RC_FILE\033[0m"
-    echo ""
-    echo "Componentes instalados:"
-
+# --- FINAL SUCCESS MESSAGE ---
+final_message() {
+    echo "Installation completed successfully - 601v"
+    echo "You can now use the tool by opening a new terminal or running:"
+    echo "source $RC_FILE"
+    
     if [ "$INSTALL_MODE" == "cli" ] || [ "$INSTALL_MODE" == "both" ]; then
-        echo "  • Consola interactiva : k3smanager"
+        echo "CLI Component installed - 602v"
     fi
-
+    
     if [ "$INSTALL_MODE" == "gui" ] || [ "$INSTALL_MODE" == "both" ]; then
-        echo "  • Interfaz Gráfica    : k3smanager-gui"
+        echo "GUI Component installed - 603v"
     fi
-
-    echo "=================================================="
 }
 
-# --- MAIN: ANÁLISIS DE ARGUMENTOS ---
+# --- EXECUTION FLOW ---
+
+# Handle command-line options
 if [ $# -gt 0 ]; then
-case "${1:-}" in
-    -v|--version)
-        echo "K3s Manager Installer - Versión ${INSTALLER_VERSION}"
-        exit 0
-        ;;
-    -h|--help)
-        echo "Uso: $0 [cli|gui|-v|--version|-h|--help]"
-        echo ""
-        echo "  Sin argumentos       Instalación interactiva"
-        echo "  cli                  Instalar solo CLI"
-        echo "  gui                  Instalar solo GUI"
-        echo "  -v, --version        Mostrar versión sin instalar"
-        echo "  -h, --help           Mostrar ayuda"
-        exit 0
-        ;;
-esac
+    case "${1:-}" in
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+    esac
 else
-    seleccionar_modo
+    select_mode
 fi
 
-# --- COMPROBAR PRIVILEGIOS ---
+# Ensure root privileges
 if [ "$EUID" -ne 0 ]; then
-    echo -e "\n\033[1;31m[X] Error: Este instalador necesita permisos de administrador.\033[0m"
-    echo "    Por favor, ejecútalo escribiendo:"
-    echo -e "    \033[1;33msudo ./k3sinstaller.sh\033[0m\n"
+    echo "Administrator privileges required - 101x"
+    echo "Please run: sudo ./k3sinstaller.sh"
     exit 1
 fi
 
-# --- IDENTIFICAR USUARIO REAL ---
+# Resolve real system user (avoiding root home issues)
 if [ -n "$SUDO_USER" ]; then
     REAL_USER="$SUDO_USER"
     REAL_HOME=$(eval echo "~$SUDO_USER")
@@ -408,14 +254,13 @@ else
     REAL_HOME="$HOME"
 fi
 
-echo "[i] Instalando para el usuario del sistema: $REAL_USER"
+echo "Installing for system user: $REAL_USER - 102v"
 
-# --- EJECUTAR INSTALACIÓN ---
-limpiar_previos
-instalar_dependencias
-instalar_kubernetes
-configurar_red
-configurar_kubeconfig
-descargar_componentes
-configurar_aliases
-mensaje_final
+# Run installation pipeline
+clean_installation
+install_dependencies
+network_config
+kubeconfig_config
+components_download
+alias_config
+final_message
