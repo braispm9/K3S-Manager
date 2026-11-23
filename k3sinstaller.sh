@@ -2,7 +2,7 @@
 
 # --- CONFIGURATION ---
 GITHUB_USER="braispm9"; REPO_NAME="K3S-Manager"; BRANCH="main"
-SCRIPT_NAME="k3smanager.sh"; GUI_SCRIPT_NAME="k3smanager-gui.py"; INSTALLER_VERSION="2.3"
+SCRIPT_NAME="k3smanager.sh"; GUI_SCRIPT_NAME="k3smanager-gui.py"; INSTALLER_VERSION="2.1"
 INSTALL_DIR="/usr/local/bin"
 DESTINO_CLI="${INSTALL_DIR}/k3smanager"
 DESTINO_SH="${INSTALL_DIR}/k3smanager.sh"
@@ -25,10 +25,39 @@ show_help() {
  K3s Manager Master Installer - Help
 =====================================================
 Usage: sudo ./k3sinstallerALL.sh [OPTION]
-  (no args)  Interactive management menu
-  -v         Show version
-  -h         Show help
+  (no args)       Interactive management menu
+  -u, --verify-update  Check for remote updates
+  -v              Show version
+  -h              Show help
 EOF
+}
+
+# --- CHECK FOR UPDATES ---
+verify_update() {
+    echo "Checking for remote updates from GitHub - 721v"
+    REMOTE_VERSION_URL="https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/k3sinstallerALL.sh"
+    
+    # Download remote header version temporarily to compare
+    REMOTE_CONTENT=$(curl -fsSL "$REMOTE_VERSION_URL" 2>/dev/null)
+    if [ -z "$REMOTE_CONTENT" ]; then
+        echo "Failed to reach GitHub repository for update check - 721x"
+        return 1
+    fi
+    
+    REMOTE_VERSION=$(echo "$REMOTE_CONTENT" | grep -m 1 "INSTALLER_VERSION=" | cut -d'"' -f2)
+    
+    if [ "$REMOTE_VERSION" != "$INSTALLER_VERSION" ] && [ -n "$REMOTE_VERSION" ]; then
+        echo "New version available: v$REMOTE_VERSION (Current: v$INSTALLER_VERSION) - 722v"
+        read -e -p "Do you want to update now? (y/n): " choice
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
+            echo "$REMOTE_CONTENT" > "$SELF_PATH"
+            chmod +x "$SELF_PATH"
+            echo "Installer updated successfully. Please re-run it. - 723v"
+            exit 0
+        fi
+    else
+        echo "Installer is already up to date (v$INSTALLER_VERSION) - 724v"
+    fi
 }
 
 select_mode() {
@@ -313,6 +342,10 @@ if [ $# -gt 0 ]; then
             show_help
             exit 0
             ;;
+        -u|--verify-update)
+            verify_update
+            exit 0
+            ;;
         cli)
             INSTALL_MODE="cli"
             ;;
@@ -321,6 +354,9 @@ if [ $# -gt 0 ]; then
             ;;
     esac
 else
+    # Automatically verify updates on startup when no arguments are passed
+    verify_update
+    echo ""
     select_mode
 fi
 
