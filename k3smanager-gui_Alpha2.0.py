@@ -20,13 +20,13 @@ def clean_ansi(text):
   return ansi_escape.sub("", text)
 
 
-class K3sManagerModularGUI:
+class K3sManagerApp:
 
   def __init__(self, root):
     self.root = root
-    self.root.title("K3s Manager — Modular Enterprise Dashboard")
-    self.root.geometry("1200x850")
-    self.root.minsize(950, 700)
+    self.root.title("K3s Manager — Modular Control Center")
+    self.root.geometry("520x360")
+    self.root.minsize(480, 320)
 
     self.bg_window = "#0b0f19"
     self.bg_card = "#111827"
@@ -38,130 +38,145 @@ class K3sManagerModularGUI:
     self.current_working_dir = os.path.expanduser("~")
 
     # Estilos globales
-    self.style = ttk.Style()
-    self.style.theme_use("clam")
-    self.style.configure(
+    style = ttk.Style()
+    style.theme_use("clam")
+    style.configure(
         ".",
         background=self.bg_card,
         foreground=self.text_main,
         font=("Segoe UI", 10),
     )
-    self.style.configure(
-        "Treeview",
-        background="#111827",
-        foreground=self.text_main,
-        fieldbackground="#111827",
-        borderwidth=0,
-        rowheight=26,
-        font=("Segoe UI", 9),
-    )
-    self.style.configure(
-        "Treeview.Heading",
-        background="#0b0f19",
-        foreground=self.accent,
-        font=("Segoe UI", 9, "bold"),
-        relief="flat",
-    )
 
-    # Menú superior para añadir/gestionar módulos
-    self.create_top_menu()
+    # Ventanas hijas abiertas para evitar duplicados
+    self.open_windows = {}
 
-    # Contenedor principal con PanedWindow vertical/horizontal (Permite redimensionar módulos libremente)
-    self.main_pane = ttk.PanedWindow(self.root, orient=tk.VERTICAL)
-    self.main_pane.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    self.create_main_hub()
 
-    # Paneles superiores e inferiores deslizantes
-    self.top_frame_container = ttk.Frame(self.main_pane)
-    self.bottom_frame_container = ttk.Frame(self.main_pane)
+  def create_main_hub(self):
+    # Contenedor Principal del Hub
+    main_frame = tk.Frame(self.root, bg=self.bg_window)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    self.main_pane.add(self.top_frame_container, weight=3)
-    self.main_pane.add(self.bottom_frame_container, weight=2)
-
-    # Estado de módulos activos
-    self.active_modules = {}
-
-    # Construir interfaz inicial limpia
-    self.build_pod_module(self.top_frame_container)
-    self.build_console_module(self.bottom_frame_container, "Pods Output")
-
-    self.update_pods_list()
-
-  def create_top_menu(self):
-    menubar = tk.Menu(
-        self.root, bg="#111827", fg=self.text_main, bd=0, activebackground="#1e293b"
-    )
-
-    # Menú Modulos
-    module_menu = tk.Menu(
-        menubar,
-        tearoff=0,
-        bg="#111827",
-        fg=self.text_main,
-        activebackground="#1e293b",
-    )
-    module_menu.add_command(
-        label="📦 Load Pod Management", command=lambda: self.load_module("pods")
-    )
-    module_menu.add_command(
-        label="🌐 Load Network & Ports", command=lambda: self.load_module("net")
-    )
-    module_menu.add_command(
-        label="🛡️ Load Audit & Security", command=lambda: self.load_module("audit")
-    )
-    module_menu.add_command(
-        label="📖 Load User Guide", command=lambda: self.load_module("help")
-    )
-    menubar.add_cascade(label="Modules", menu=module_menu)
-
-    # Menú Terminal / Utilidades
-    tools_menu = tk.Menu(
-        menubar,
-        tearoff=0,
-        bg="#111827",
-        fg=self.text_main,
-        activebackground="#1e293b",
-    )
-    tools_menu.add_command(
-        label="💻 Open External Terminal",
-        command=self.open_external_terminal,
-    )
-    tools_menu.add_command(
-        label="🧹 Clear All Consoles", command=self.clear_consoles
-    )
-    menubar.add_cascade(label="Tools", menu=tools_menu)
-
-    self.root.config(menu=menubar)
-
-  def load_module(self, module_name):
-    # Limpiar contenedor superior para alternar módulos de forma fluida y ordenada
-    for widget in self.top_frame_container.winfo_children():
-      widget.destroy()
-
-    if module_name == "pods":
-      self.build_pod_module(self.top_frame_container)
-      self.update_pods_list()
-    elif module_name == "net":
-      self.build_net_module(self.top_frame_container)
-    elif module_name == "audit":
-      self.build_audit_module(self.top_frame_container)
-    elif module_name == "help":
-      self.build_help_module(self.top_frame_container)
-
-  def build_pod_module(self, parent):
-    container = tk.LabelFrame(
-        parent,
-        text=" Pod Management Module ",
-        bg=self.bg_card,
+    tk.Label(
+        main_frame,
+        text="K3s Manager Control Hub",
+        bg=self.bg_window,
         fg=self.accent,
-        font=("Segoe UI", 10, "bold"),
-        bd=2,
-        relief="groove",
-    )
-    container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        font=("Segoe UI", 14, "bold"),
+    ).pack(pady=(0, 15))
+
+    modules_frame = tk.Frame(main_frame, bg=self.bg_window)
+    modules_frame.pack(fill=tk.BOTH, expand=True)
+
+    btn_configs = [
+        (
+            "📦 Pod Management",
+            "pods",
+            "Manage pods, logs, deployment & selection",
+        ),
+        (
+            "🌐 Network & Ports",
+            "net",
+            "Network policies, port scanning & tests",
+        ),
+        ("🛡️ Audit & Security", "audit", "Live connection monitoring & updates"),
+        ("📖 User Guide", "help", "Commands and manual reference"),
+    ]
+
+    for title, mod_key, desc in btn_configs:
+      card = tk.Frame(modules_frame, bg=self.bg_card, bd=1, relief="solid")
+      card.pack(fill=tk.X, pady=6)
+
+      info_f = tk.Frame(card, bg=self.bg_card)
+      info_f.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=12, pady=10)
+
+      tk.Label(
+          info_f,
+          text=title,
+          bg=self.bg_card,
+          fg=self.text_main,
+          font=("Segoe UI", 11, "bold"),
+          anchor="w",
+      ).pack(fill=tk.X)
+      tk.Label(
+          info_f,
+          text=desc,
+          bg=self.bg_card,
+          fg=self.text_muted,
+          font=("Segoe UI", 9),
+          anchor="w",
+      ).pack(fill=tk.X)
+
+      tk.Button(
+          card,
+          text="Open Module",
+          command=lambda k=mod_key: self.open_module_window(k),
+          bg="#1e293b",
+          fg=self.accent,
+          activebackground=self.accent,
+          activeforeground="#0f172a",
+          relief=tk.FLAT,
+          font=("Segoe UI", 9, "bold"),
+          padx=12,
+          pady=8,
+      ).pack(side=tk.RIGHT, padx=12, pady=10)
+
+    # Barra inferior de herramientas rápidas
+    tool_f = tk.Frame(main_frame, bg=self.bg_window)
+    tool_f.pack(fill=tk.X, pady=(10, 0))
+
+    tk.Button(
+        tool_f,
+        text="💻 External Terminal",
+        command=self.open_external_terminal,
+        bg="#161e2e",
+        fg=self.text_muted,
+        relief=tk.FLAT,
+        font=("Segoe UI", 9),
+    ).pack(side=tk.LEFT)
+
+    if not os.path.exists(SCRIPT_BASH):
+      messagebox.showwarning(
+          "Warning", f"Script '{SCRIPT_BASH}' not found in current directory!"
+      )
+
+  def open_module_window(self, mod_key):
+    # Si la ventana ya está abierta, traerla al frente
+    if mod_key in self.open_windows and self.open_windows[mod_key].winfo_exists():
+      self.open_windows[mod_key].lift()
+      return
+
+    win = tk.Toplevel(self.root)
+    win.configure(bg=self.bg_window)
+    self.open_windows[mod_key] = win
+
+    if mod_key == "pods":
+      win.title("K3s Manager — Pod Management")
+      win.geometry("900x650")
+      self.build_pod_window(win)
+    elif mod_key == "net":
+      win.title("K3s Manager — Network & Ports")
+      win.geometry("750x600")
+      self.build_net_window(win)
+    elif mod_key == "audit":
+      win.title("K3s Manager — Audit & Security")
+      win.geometry("700x550")
+      self.build_audit_window(win)
+    elif mod_key == "help":
+      win.title("K3s Manager — User Guide")
+      win.geometry("650x500")
+      self.build_help_window(win)
+
+  # ==========================================
+  # MÓDULO 1: GESTIÓN DE PODS (Con Creación y Logs)
+  # ==========================================
+  def build_pod_window(self, win):
+    container = tk.Frame(win, bg=self.bg_card)
+    container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     # Botones de acción rápida
-    btn_frame = tk.Frame(container, bg=self.bg_card)
-    btn_frame.pack(fill=tk.X, padx=10, pady=8)
+    btn_f = tk.Frame(container, bg=self.bg_card)
+    btn_f.pack(fill=tk.X, padx=10, pady=10)
 
     actions = [
         ("🔄 Refresh", self.update_pods_list),
@@ -174,69 +189,62 @@ class K3sManagerModularGUI:
 
     for idx, (txt, cmd) in enumerate(actions):
       tk.Button(
-          btn_frame,
+          btn_f,
           text=txt,
           command=cmd,
           bg="#1e293b",
           fg=self.text_main,
-          activebackground=self.accent,
           relief=tk.FLAT,
           font=("Segoe UI", 9, "bold"),
-          padx=10,
-          pady=5,
-      ).grid(row=0, column=idx, padx=4, sticky="ew")
-      btn_frame.columnconfigure(idx, weight=1)
+          padx=8,
+          pady=6,
+      ).grid(row=0, column=idx, padx=3, sticky="ew")
+      btn_f.columnconfigure(idx, weight=1)
 
-    # Tabla Treeview
-    table_frame = tk.Frame(container, bg=self.bg_card)
-    table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    # Tabla
+    table_f = tk.Frame(container, bg=self.bg_card)
+    table_f.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
     self.tree_pods = ttk.Treeview(
-        table_frame,
+        table_f,
         columns=("ID", "Namespace", "Name"),
         show="headings",
         height=8,
         selectmode="extended",
     )
     for col, w, anchor in [
-        ("ID", 70, tk.CENTER),
+        ("ID", 60, tk.CENTER),
         ("Namespace", 200, tk.W),
-        ("Name", 450, tk.W),
+        ("Name", 400, tk.W),
     ]:
       self.tree_pods.heading(col, text=col)
       self.tree_pods.column(col, width=w, anchor=anchor)
 
-    scrollbar = ttk.Scrollbar(
-        table_frame, orient=tk.VERTICAL, command=self.tree_pods.yview
+    scroll = ttk.Scrollbar(
+        table_f, orient=tk.VERTICAL, command=self.tree_pods.yview
     )
-    self.tree_pods.configure(yscrollcommand=scrollbar.set)
+    self.tree_pods.configure(yscrollcommand=scroll.set)
     self.tree_pods.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
-    # Controles inferiores de IDs / Despliegue
-    ctrl_frame = tk.Frame(container, bg=self.bg_card)
-    ctrl_frame.pack(fill=tk.X, padx=10, pady=8)
+    # Controles de IDs y Creación
+    ctrl_f = tk.Frame(container, bg=self.bg_card)
+    ctrl_f.pack(fill=tk.X, padx=10, pady=10)
 
     tk.Label(
-        ctrl_frame,
-        text="IDs / Range:",
-        bg=self.bg_card,
-        fg=self.text_main,
-        font=("Segoe UI", 9),
+        ctrl_f, text="IDs / Range:", bg=self.bg_card, fg=self.text_main
     ).grid(row=0, column=0, sticky="w", padx=5)
     self.entry_ids = tk.Entry(
-        ctrl_frame,
+        ctrl_f,
         bg="#0b0f19",
         fg=self.text_main,
         insertbackground="white",
         font=("Segoe UI", 10),
-        relief=tk.FLtr if hasattr(tk, "FLtr") else tk.SOLID,
-        bd=1,
     )
     self.entry_ids.grid(row=0, column=1, padx=5, sticky="ew")
 
     tk.Button(
-        ctrl_frame,
+        ctrl_f,
         text="Select",
         command=lambda: self.exec_action_ids("add"),
         bg="#1e293b",
@@ -244,7 +252,7 @@ class K3sManagerModularGUI:
         relief=tk.FLAT,
     ).grid(row=0, column=2, padx=3)
     tk.Button(
-        ctrl_frame,
+        ctrl_f,
         text="Deselect",
         command=lambda: self.exec_action_ids("remove"),
         bg="#1e293b",
@@ -252,7 +260,7 @@ class K3sManagerModularGUI:
         relief=tk.FLAT,
     ).grid(row=0, column=3, padx=3)
     tk.Button(
-        ctrl_frame,
+        ctrl_f,
         text="Get IP",
         command=lambda: self.exec_action_ids("ip"),
         bg="#1e293b",
@@ -260,47 +268,72 @@ class K3sManagerModularGUI:
         relief=tk.FLAT,
     ).grid(row=0, column=4, padx=3)
 
-  def build_net_module(self, parent):
-    container = tk.LabelFrame(
-        parent,
-        text=" Network & Port Control Module ",
+    # Crear Pods
+    tk.Label(
+        ctrl_f,
+        text="Create (Qty/Range):",
         bg=self.bg_card,
-        fg=self.accent,
-        font=("Segoe UI", 10, "bold"),
-        bd=2,
-        relief="groove",
+        fg=self.text_main,
+    ).grid(row=1, column=0, sticky="w", padx=5, pady=8)
+    self.entry_create = tk.Entry(
+        ctrl_f,
+        bg="#0b0f19",
+        fg=self.text_main,
+        insertbackground="white",
+        font=("Segoe UI", 10),
     )
-    container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    self.entry_create.grid(row=1, column=1, padx=5, pady=8, sticky="ew")
+
+    tk.Button(
+        ctrl_f,
+        text="🚀 Create Pods",
+        command=self.create_pods_gui,
+        bg="#0369a1",
+        fg=self.text_main,
+        relief=tk.FLAT,
+        font=("Segoe UI", 9, "bold"),
+    ).grid(row=1, column=2, columnspan=3, sticky="ew", padx=3, pady=8)
+
+    # Consola integrada en la ventana
+    self.console_pods = self.create_embedded_console(container)
+    self.update_pods_list()
+
+  # ==========================================
+  # MÓDULO 2: RED Y PUERTOS
+  # ==========================================
+  def build_net_window(self, win):
+    container = tk.Frame(win, bg=self.bg_card)
+    container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     tk.Label(
         container,
-        text="Pod ID or Range (e.g. 1-5):",
+        text="Pod ID or Range (e.g. 1 or 1-5):",
         bg=self.bg_card,
         fg=self.text_main,
-    ).pack(anchor="w", padx=15, pady=5)
+        font=("Segoe UI", 10, "bold"),
+    ).pack(anchor="w", padx=10, pady=5)
     self.entry_red_arg = tk.Entry(
         container,
         bg="#0b0f19",
         fg=self.text_main,
         insertbackground="white",
         font=("Segoe UI", 10),
-        bd=1,
     )
-    self.entry_red_arg.pack(fill=tk.X, padx=15, pady=5)
+    self.entry_red_arg.pack(fill=tk.X, padx=10, pady=5)
 
     btn_f = tk.Frame(container, bg=self.bg_card)
-    btn_f.pack(fill=tk.X, padx=15, pady=10)
+    btn_f.pack(fill=tk.X, padx=10, pady=10)
 
     tk.Button(
         btn_f,
         text="🔍 Scan Ports",
         command=self.gui_check_ports,
         bg="#1e293b",
-        fg=self.text_main,
+        fg=self.accent,
         relief=tk.FLAT,
-        padx=10,
-        pady=5,
-    ).pack(side=tk.LEFT, padx=5)
+        padx=12,
+        pady=6,
+    ).pack(side=tk.LEFT, padx=4)
     tk.Button(
         btn_f,
         text="🔒 Isolate / Close",
@@ -308,9 +341,9 @@ class K3sManagerModularGUI:
         bg="#7f1d1d",
         fg=self.text_main,
         relief=tk.FLAT,
-        padx=10,
-        pady=5,
-    ).pack(side=tk.LEFT, padx=5)
+        padx=12,
+        pady=6,
+    ).pack(side=tk.LEFT, padx=4)
     tk.Button(
         btn_f,
         text="🔓 Restore / Open",
@@ -318,54 +351,121 @@ class K3sManagerModularGUI:
         bg="#065f46",
         fg=self.text_main,
         relief=tk.FLAT,
-        padx=10,
-        pady=5,
-    ).pack(side=tk.LEFT, padx=5)
+        padx=12,
+        pady=6,
+    ).pack(side=tk.LEFT, padx=4)
 
-  def build_audit_module(self, parent):
-    container = tk.LabelFrame(
-        parent,
-        text=" Audit & System Control Module ",
+    # Tests de conectividad avanzados
+    adv_f = tk.LabelFrame(
+        container,
+        text=" Advanced Tests ",
         bg=self.bg_card,
         fg=self.accent,
-        font=("Segoe UI", 10, "bold"),
-        bd=2,
-        relief="groove",
+        font=("Segoe UI", 9, "bold"),
     )
-    container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    adv_f.pack(fill=tk.X, padx=10, pady=10)
+
+    sub_f1 = tk.Frame(adv_f, bg=self.bg_card)
+    sub_f1.pack(fill=tk.X, padx=10, pady=6)
+    tk.Label(
+        sub_f1, text="Test-net range (-a / 1-5):", bg=self.bg_card, fg=self.text_main
+    ).pack(side=tk.LEFT)
+    self.entry_test_net = tk.Entry(
+        sub_f1, bg="#0b0f19", fg=self.text_main, insertbackground="white", width=15
+    )
+    self.entry_test_net.pack(side=tk.LEFT, padx=10)
+    tk.Button(
+        sub_f1,
+        text="⚡ Run Test Network",
+        command=self.gui_test_network,
+        bg="#1e293b",
+        fg=self.text_main,
+        relief=tk.FLAT,
+    ).pack(side=tk.LEFT)
+
+    sub_f2 = tk.Frame(adv_f, bg=self.bg_card)
+    sub_f2.pack(fill=tk.X, padx=10, pady=6)
+    tk.Label(sub_f2, text="Src ID:", bg=self.bg_card, fg=self.text_main).pack(
+        side=tk.LEFT
+    )
+    self.entry_orig = tk.Entry(
+        sub_f2, bg="#0b0f19", fg=self.text_main, insertbackground="white", width=6
+    )
+    self.entry_orig.pack(side=tk.LEFT, padx=5)
+    tk.Label(sub_f2, text="Dst ID:", bg=self.bg_card, fg=self.text_main).pack(
+        side=tk.LEFT, padx=(10, 0)
+    )
+    self.entry_dest = tk.Entry(
+        sub_f2, bg="#0b0f19", fg=self.text_main, insertbackground="white", width=6
+    )
+    self.entry_dest.pack(side=tk.LEFT, padx=5)
+    tk.Button(
+        sub_f2,
+        text="⇄ Test Connections",
+        command=self.gui_test_connections,
+        bg="#1e293b",
+        fg=self.text_main,
+        relief=tk.FLAT,
+    ).pack(side=tk.LEFT, padx=10)
+
+    self.console_net = self.create_embedded_console(container)
+
+  # ==========================================
+  # MÓDULO 3: AUDITORÍA Y SEGURIDAD
+  # ==========================================
+  def build_audit_window(self, win):
+    container = tk.Frame(win, bg=self.bg_card)
+    container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    tk.Label(
+        container,
+        text="Monitor external connections & manage script versions.",
+        bg=self.bg_card,
+        fg=self.text_muted,
+    ).pack(anchor="w", padx=10, pady=5)
+
+    btn_f = tk.Frame(container, bg=self.bg_card)
+    btn_f.pack(fill=tk.X, padx=10, pady=10)
 
     tk.Button(
-        container,
+        btn_f,
         text="📡 Start Connection Monitoring",
         command=self.gui_monitor_connect,
         bg="#1e293b",
         fg=self.accent,
         relief=tk.FLAT,
-        padx=15,
+        padx=12,
         pady=8,
-    ).pack(anchor="w", padx=15, pady=15)
+    ).pack(side=tk.LEFT, padx=5)
     tk.Button(
-        container,
-        text="ℹ️ Check Version & Updates",
+        btn_f,
+        text="ℹ️ Check Version",
         command=self.gui_version,
         bg="#1e293b",
         fg=self.text_main,
         relief=tk.FLAT,
-        padx=15,
+        padx=12,
         pady=8,
-    ).pack(anchor="w", padx=15, pady=5)
+    ).pack(side=tk.LEFT, padx=5)
+    tk.Button(
+        btn_f,
+        text="⬆️ Update Manager",
+        command=self.gui_update_script,
+        bg="#0369a1",
+        fg=self.text_main,
+        relief=tk.FLAT,
+        padx=12,
+        pady=8,
+    ).pack(side=tk.LEFT, padx=5)
 
-  def build_help_module(self, parent):
-    container = tk.LabelFrame(
-        parent,
-        text=" User Guide ",
-        bg=self.bg_card,
-        fg=self.accent,
-        font=("Segoe UI", 10, "bold"),
-        bd=2,
-        relief="groove",
-    )
-    container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    self.console_audit = self.create_embedded_console(container)
+
+  # ==========================================
+  # MÓDULO 4: GUÍA DE USUARIO
+  # ==========================================
+  def build_help_window(self, win):
+    container = tk.Frame(win, bg=self.bg_card)
+    container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     txt = scrolledtext.ScrolledText(
         container,
@@ -375,32 +475,49 @@ class K3sManagerModularGUI:
         bd=0,
         highlightthickness=0,
     )
-    txt.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    txt.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     txt.insert(
         tk.END,
-        """K3S MANAGER MODULAR GUI (Release 4.21)
-Use the top 'Modules' menu to load different operational windows into this panel seamlessly without breaking layout constraints.
-- Pod Management: Handle cluster pods, logs, and executions.
-- Network & Ports: Manage network policies and security filters.
-- Audit: Monitor inbound traffic and system versions.""",
+        """====================================================================
+K3S MANAGER USER GUIDE (Release 4.21)
+====================================================================
+
+--- POD COMMANDS ---
+  • pods [ID|N-M|-A]        : List pods with strict IDs.
+  • select <IDs>             : Add pod(s) to active selection.
+  • remove <IDs>             : Remove pod(s) from selection.
+  • clear-sel                : Clear active pod selection.
+  • show                     : Show currently selected pods.
+
+--- INFORMATION & ACTIONS ---
+  • ip <ID | Name> [ns]      : Get internal IP of a pod.
+  • describe [-l]            : View summary or full details.
+  • logs                     : Show logs (requires 1 selected pod).
+  • delete                   : Delete selected pods.
+  • create <N|N-M> [-i img]  : Create pods individually or by range.
+
+--- NETWORK & SECURITY TESTS ---
+  • check-ports [ID | N-M]   : Scan open ports.
+  • close-port <ID|N-M>      : Block network traffic (NetworkPolicy).
+  • open-port <ID|N-M>       : Restore network traffic.
+  • monitor-connect          : Monitor incoming traffic in background.
+  • test-network [N | N-M]   : Bulk connectivity test.
+  • test-connections [src dst]: Direct traffic test between two pods.
+""",
     )
     txt.config(state=tk.DISABLED)
 
-  def build_console_module(self, parent, title):
-    container = tk.LabelFrame(
-        parent,
-        text=f" {title} ",
-        bg=self.bg_card,
-        fg=self.accent,
-        font=("Segoe UI", 10, "bold"),
-        bd=2,
-        relief="groove",
-    )
-    container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+  # ==========================================
+  # CONSOLA EMBRICADA AUXILIAR
+  # ==========================================
+  def create_embedded_console(self, parent):
+    consola_frame = tk.Frame(parent, bg=self.bg_card)
+    consola_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-    self.console = scrolledtext.ScrolledText(
-        container,
+    consola = scrolledtext.ScrolledText(
+        consola_frame,
         wrap=tk.WORD,
+        height=10,
         bg="#070a12",
         fg="#38bdf8",
         insertbackground="white",
@@ -408,37 +525,38 @@ Use the top 'Modules' menu to load different operational windows into this panel
         bd=0,
         highlightthickness=0,
     )
-    self.console.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-    self.console.config(state=tk.DISABLED)
+    consola.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    consola.config(state=tk.DISABLED)
 
     scrollbar = ttk.Scrollbar(
-        container, orient=tk.VERTICAL, command=self.console.yview
+        consola_frame, orient=tk.VERTICAL, command=consola.yview
     )
-    self.console.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=5)
+    consola.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    return consola
 
-  def write_console(self, text):
-    if not hasattr(self, "console") or not self.console:
+  # ==========================================
+  # FUNCIONES DE EJECUCIÓN Y COMANDOS BASH
+  # ==========================================
+  def write_console(self, console_target, text):
+    if not console_target or not console_target.winfo_exists():
       return
 
     def _write():
-      self.console.config(state=tk.NORMAL)
-      self.console.insert(tk.END, text + "\n")
-      self.console.see(tk.END)
-      self.console.config(state=tk.DISABLED)
+      try:
+        console_target.config(state=tk.NORMAL)
+        console_target.insert(tk.END, text + "\n")
+        console_target.see(tk.END)
+        console_target.config(state=tk.DISABLED)
+      except Exception:
+        pass
 
     if threading.current_thread() is threading.main_thread():
       _write()
     else:
       self.root.after(0, _write)
 
-  def clear_consoles(self):
-    if hasattr(self, "console") and self.console:
-      self.console.config(state=tk.NORMAL)
-      self.console.delete("1.0", tk.END)
-      self.console.config(state=tk.DISABLED)
-
-  def run_cmd_realtime(self, cmd):
+  def run_cmd_realtime(self, cmd, console_target):
     try:
       process = subprocess.Popen(
           cmd,
@@ -455,14 +573,16 @@ Use the top 'Modules' menu to load different operational windows into this panel
         if not line and process.poll() is not None:
           break
         if line:
-          self.write_console(clean_ansi(line.strip()))
+          self.write_console(console_target, clean_ansi(line.strip()))
       process.wait()
     except Exception as e:
-      self.write_console(f"Error executing command: {str(e)}")
+      self.write_console(
+          console_target, f"Critical error executing command: {str(e)}"
+      )
 
   def update_pods_list(self):
     def tarea():
-      if not hasattr(self, "tree_pods"):
+      if not hasattr(self, "tree_pods") or not self.tree_pods.winfo_exists():
         return
       for row in self.tree_pods.get_children():
         self.tree_pods.delete(row)
@@ -488,7 +608,8 @@ Use the top 'Modules' menu to load different operational windows into this panel
 
       if not salida:
         self.write_console(
-            "[NOTICE] Could not list pods or no K3s connection."
+            self.console_pods,
+            "[NOTICE] Could not list pods or no K3s connection.",
         )
         return
 
@@ -498,7 +619,9 @@ Use the top 'Modules' menu to load different operational windows into this panel
         if len(partes) >= 2 and partes[0] != "kube-system":
           self.tree_pods.insert("", tk.END, values=(idx, partes[0], partes[1]))
           idx += 1
-      self.write_console("[OK] Pod table synchronized successfully.")
+      self.write_console(
+          self.console_pods, "[OK] Pod table synchronized successfully."
+      )
 
     threading.Thread(target=tarea, daemon=True).start()
 
@@ -507,21 +630,22 @@ Use the top 'Modules' menu to load different operational windows into this panel
       return
     selected_items = self.tree_pods.selection()
     if not selected_items:
-      self.write_console("[INFO] No pods selected.")
+      self.write_console(self.console_pods, "[INFO] No pods selected in table.")
     else:
-      self.write_console("\n--- Selected Pods ---")
+      self.write_console(self.console_pods, "\n--- Selected Pods ---")
       for item in selected_items:
         val = self.tree_pods.item(item, "values")
-        self.write_console(f" • ID: {val[0]} | NS: {val[1]} | Pod: {val[2]}")
+        self.write_console(
+            self.console_pods,
+            f" • ID: {val[0]} | NS: {val[1]} | Pod: {val[2]}",
+        )
 
   def clear_selection(self):
     if hasattr(self, "tree_pods"):
       self.tree_pods.selection_remove(self.tree_pods.selection())
-      self.write_console("[OK] Selection cleared.")
+      self.write_console(self.console_pods, "[OK] Table selection cleared.")
 
   def view_logs(self):
-    if not hasattr(self, "tree_pods"):
-      return
     selected = self.tree_pods.selection()
     if len(selected) != 1:
       messagebox.showerror(
@@ -529,95 +653,147 @@ Use the top 'Modules' menu to load different operational windows into this panel
       )
       return
     val = self.tree_pods.item(selected[0], "values")
-    self.write_console(f"\n--- Fetching Logs for: {val[2]} ({val[1]}) ---")
+    self.write_console(
+        self.console_pods, f"\n--- Fetching Logs for: {val[2]} ({val[1]}) ---"
+    )
     threading.Thread(
         target=lambda: self.run_cmd_realtime(
-            f"kubectl logs {val[2]} -n {val[1]} --tail=50"
+            f"kubectl logs {val[2]} -n {val[1]} --tail=50", self.console_pods
         ),
         daemon=True,
     ).start()
 
   def describe_pod(self):
-    if not hasattr(self, "tree_pods"):
-      return
     selected = self.tree_pods.selection()
     if not selected:
-      messagebox.showerror("Error", "Select at least one pod.")
+      messagebox.showerror(
+          "Error", "Please select at least one pod to describe."
+      )
       return
-    threading.Thread(
-        target=lambda: [
-            (
-                self.write_console(
-                    f"\n=== DESCRIBE: {self.tree_pods.item(i, 'values')[2]} ==="
-                ),
-                self.run_cmd_realtime(
-                    f"kubectl describe pod {self.tree_pods.item(i, 'values')[2]}"
-                    f" -n {self.tree_pods.item(i, 'values')[1]}"
-                ),
-            )
-            for i in selected
-        ],
-        daemon=True,
-    ).start()
+
+    def tarea():
+      for item in selected:
+        val = self.tree_pods.item(item, "values")
+        self.write_console(
+            self.console_pods, f"\n=== DESCRIBE: {val[2]} ({val[1]}) ==="
+        )
+        self.run_cmd_realtime(
+            f"kubectl describe pod {val[2]} -n {val[1]}", self.console_pods
+        )
+
+    threading.Thread(target=tarea, daemon=True).start()
 
   def delete_pods_sel(self):
-    if not hasattr(self, "tree_pods"):
-      return
     selected = self.tree_pods.selection()
     if not selected:
-      messagebox.showerror("Error", "No pods selected.")
+      messagebox.showerror("Error", "No pods selected for deletion.")
       return
-    if messagebox.askyesno("Confirm", "Delete selected pods?"):
-      threading.Thread(
-          target=lambda: [
-              self.run_cmd_realtime(
-                  f"kubectl delete pod {self.tree_pods.item(i, 'values')[2]} -n"
-                  f" {self.tree_pods.item(i, 'values')[1]}"
-              )
-              for i in selected
-          ],
-          daemon=True,
-      ).start()
+    if messagebox.askyesno(
+        "Confirm Deletion",
+        f"Are you sure you want to delete {len(selected)} selected pod(s)?",
+    ):
+
+      def tarea():
+        for item in selected:
+          val = self.tree_pods.item(item, "values")
+          self.write_console(
+              self.console_pods, f"Deleting pod {val[2]} in {val[1]}..."
+          )
+          self.run_cmd_realtime(
+              f"kubectl delete pod {val[2]} -n {val[1]}", self.console_pods
+          )
+        self.update_pods_list()
+
+      threading.Thread(target=tarea, daemon=True).start()
 
   def exec_action_ids(self, accion):
-    if not hasattr(self, "entry_ids"):
-      return
     arg = self.entry_ids.get().strip()
     if not arg:
-      messagebox.showerror("Error", "Enter a valid ID.")
+      messagebox.showerror("Error", "Please enter a valid ID or range.")
       return
-    cmd = (
-        f"bash {SCRIPT_BASH} {accion} pod {arg}"
-        if accion in ["add", "remove"]
-        else f"bash {SCRIPT_BASH} ip {arg}"
-    )
-    threading.Thread(
-        target=lambda: self.run_cmd_realtime(cmd), daemon=True
-    ).start()
+
+    def tarea():
+      self.write_console(
+          self.console_pods,
+          f"\nExecuting action '{accion}' with argument '{arg}'...",
+      )
+      cmd = (
+          f"bash {SCRIPT_BASH} {accion} pod {arg}"
+          if accion in ["add", "remove"]
+          else f"bash {SCRIPT_BASH} ip {arg}"
+      )
+      self.run_cmd_realtime(cmd, self.console_pods)
+
+    threading.Thread(target=tarea, daemon=True).start()
+
+  def create_pods_gui(self):
+    param = self.entry_create.get().strip()
+    if not param:
+      messagebox.showerror(
+          "Error", "Specify a quantity or range (e.g. 3 or 1-5)."
+      )
+      return
+
+    def tarea():
+      self.write_console(self.console_pods, f"\nDeploying pods ({param})...")
+      self.run_cmd_realtime(
+          f"bash {SCRIPT_BASH} create {param}", self.console_pods
+      )
+      self.update_pods_list()
+
+    threading.Thread(target=tarea, daemon=True).start()
 
   def gui_check_ports(self):
-    arg = self.entry_red_arg.get().strip() if hasattr(self, "entry_red_arg") else ""
+    arg = self.entry_red_arg.get().strip()
     threading.Thread(
         target=lambda: self.run_cmd_realtime(
-            f"bash {SCRIPT_BASH} check-ports {arg}"
+            f"bash {SCRIPT_BASH} check-ports {arg}", self.console_net
         ),
         daemon=True,
     ).start()
 
   def gui_close_port(self):
-    arg = self.entry_red_arg.get().strip() if hasattr(self, "entry_red_arg") else ""
+    arg = self.entry_red_arg.get().strip()
+    if not arg:
+      messagebox.showerror("Error", "Specify an ID or range to isolate.")
+      return
     threading.Thread(
         target=lambda: self.run_cmd_realtime(
-            f"bash {SCRIPT_BASH} close-port {arg}"
+            f"bash {SCRIPT_BASH} close-port {arg}", self.console_net
         ),
         daemon=True,
     ).start()
 
   def gui_open_port(self):
-    arg = self.entry_red_arg.get().strip() if hasattr(self, "entry_red_arg") else ""
+    arg = self.entry_red_arg.get().strip()
+    if not arg:
+      messagebox.showerror("Error", "Specify an ID or range to restore.")
+      return
     threading.Thread(
         target=lambda: self.run_cmd_realtime(
-            f"bash {SCRIPT_BASH} open-port {arg}"
+            f"bash {SCRIPT_BASH} open-port {arg}", self.console_net
+        ),
+        daemon=True,
+    ).start()
+
+  def gui_test_network(self):
+    arg = self.entry_test_net.get().strip()
+    threading.Thread(
+        target=lambda: self.run_cmd_realtime(
+            f"bash {SCRIPT_BASH} test-network {arg}", self.console_net
+        ),
+        daemon=True,
+    ).start()
+
+  def gui_test_connections(self):
+    orig, dest = self.entry_orig.get().strip(), self.entry_dest.get().strip()
+    if not orig or not dest:
+      messagebox.showerror("Error", "Enter both source and destination IDs.")
+      return
+    threading.Thread(
+        target=lambda: self.run_cmd_realtime(
+            f"bash {SCRIPT_BASH} test-connections {orig} {dest}",
+            self.console_net,
         ),
         daemon=True,
     ).start()
@@ -625,16 +801,29 @@ Use the top 'Modules' menu to load different operational windows into this panel
   def gui_monitor_connect(self):
     threading.Thread(
         target=lambda: self.run_cmd_realtime(
-            f"bash {SCRIPT_BASH} monitor-connect"
+            f"bash {SCRIPT_BASH} monitor-connect", self.console_audit
         ),
         daemon=True,
     ).start()
 
   def gui_version(self):
     threading.Thread(
-        target=lambda: self.run_cmd_realtime(f"bash {SCRIPT_BASH} version"),
+        target=lambda: self.run_cmd_realtime(
+            f"bash {SCRIPT_BASH} version", self.console_audit
+        ),
         daemon=True,
     ).start()
+
+  def gui_update_script(self):
+    if messagebox.askyesno(
+        "Update", "Do you want to check and install updates for K3s Manager?"
+    ):
+      threading.Thread(
+          target=lambda: self.run_cmd_realtime(
+              f"bash {SCRIPT_BASH} update", self.console_audit
+          ),
+          daemon=True,
+      ).start()
 
   def get_configured_shell(self):
     shell_path = os.environ.get("SHELL", "")
@@ -672,5 +861,5 @@ Use the top 'Modules' menu to load different operational windows into this panel
 
 if __name__ == "__main__":
   root = tk.Tk()
-  app = K3sManagerModularGUI(root)
+  app = K3sManagerApp(root)
   root.mainloop()
