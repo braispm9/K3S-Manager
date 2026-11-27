@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import os
 import pwd
 import re
+import shlex
 import shutil
 import subprocess
+import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 import webbrowser
-import sys
-import json
 
 # Comprobar si se ha pasado el argumento JSON por la línea de comandos de forma segura
 if len(sys.argv) > 1:
@@ -23,13 +24,24 @@ if len(sys.argv) > 1:
   except (json.JSONDecodeError, TypeError):
     data = {}
 else:
-  # Comportamiento por defecto si se abre de forma independiente
   data = {}
   print("[i] Abriendo K3s Manager GUI sin datos externos (modo independiente).")
 
 # Archivo de script requerido
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_BASH = os.path.join(BASE_DIR, "k3smanager.sh")
+
+
+def construir_entorno_k3s():
+  env = os.environ.copy()
+  k3s_kubeconfig = "/etc/rancher/k3s/k3s.yaml"
+  default_kubeconfig = os.path.expanduser("~/.kube/config")
+  if "KUBECONFIG" not in env:
+    if os.path.exists(default_kubeconfig):
+      env["KUBECONFIG"] = default_kubeconfig
+    elif os.path.exists(k3s_kubeconfig) and os.access(k3s_kubeconfig, os.R_OK):
+      env["KUBECONFIG"] = k3s_kubeconfig
+  return env
 
 
 def insertar_texto_ansi(widget_text, texto):
@@ -108,6 +120,7 @@ class RoundedButton(tk.Canvas):
       bg_canvas="#111827",
       outline="",
       outline_width=1,
+      anchor="center",
   ):
     super().__init__(
         parent,
@@ -127,6 +140,7 @@ class RoundedButton(tk.Canvas):
     self.font = font
     self.outline = outline
     self.outline_width = outline_width
+    self.anchor = anchor
 
     self.bind("<Configure>", self.draw)
     self.bind("<Enter>", self.on_enter)
@@ -152,52 +166,23 @@ class RoundedButton(tk.Canvas):
         outline=self.outline,
         width=self.outline_width,
     )
-    self.create_text(
-        w / 2, h / 2, text=self.text, fill=self.fg_color, font=self.font
-    )
+
+    if self.anchor == "w":
+      self.create_text(
+          14, h / 2, text=self.text, fill=self.fg_color, font=self.font, anchor="w"
+      )
+    else:
+      self.create_text(
+          w / 2, h / 2, text=self.text, fill=self.fg_color, font=self.font, anchor="center"
+      )
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1,
+        x2, y1, x2, y1 + r, x2, y1 + r, x2, y2 - r,
+        x2, y2 - r, x2, y2, x2 - r, y2, x2 - r, y2,
+        x1 + r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
+        x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -214,9 +199,14 @@ class RoundedButton(tk.Canvas):
         outline=self.outline,
         width=self.outline_width,
     )
-    self.create_text(
-        w / 2, h / 2, text=self.text, fill=self.hover_fg, font=self.font
-    )
+    if self.anchor == "w":
+      self.create_text(
+          14, h / 2, text=self.text, fill=self.hover_fg, font=self.font, anchor="w"
+      )
+    else:
+      self.create_text(
+          w / 2, h / 2, text=self.text, fill=self.hover_fg, font=self.font, anchor="center"
+      )
 
   def on_leave(self, event):
     self.draw()
@@ -304,46 +294,11 @@ class RoundedEntry(tk.Canvas):
 
   def create_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1,
+        x2, y1, x2, y1 + r, x2, y1 + r, x2, y2 - r,
+        x2, y2 - r, x2, y2, x2 - r, y2, x2 - r, y2,
+        x1 + r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
+        x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return self.create_polygon(points, smooth=True, **kwargs)
 
@@ -431,46 +386,11 @@ class RoundedLabelFrame(tk.Frame):
 
   def create_rounded_rect(self, canvas, x1, y1, x2, y2, r, **kwargs):
     points = [
-        x1 + r,
-        y1,
-        x1 + r,
-        y1,
-        x2 - r,
-        y1,
-        x2 - r,
-        y1,
-        x2,
-        y1,
-        x2,
-        y1 + r,
-        x2,
-        y1 + r,
-        x2,
-        y2 - r,
-        x2,
-        y2 - r,
-        x2,
-        y2,
-        x2 - r,
-        y2,
-        x2 - r,
-        y2,
-        x1 + r,
-        y2,
-        x1 + r,
-        y2,
-        x1,
-        y2,
-        x1,
-        y2 - r,
-        x1,
-        y2 - r,
-        x1,
-        y1 + r,
-        x1,
-        y1 + r,
-        x1,
-        y1,
+        x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1,
+        x2, y1, x2, y1 + r, x2, y1 + r, x2, y2 - r,
+        x2, y2 - r, x2, y2, x2 - r, y2, x2 - r, y2,
+        x1 + r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
+        x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1,
     ]
     return canvas.create_polygon(points, smooth=True, **kwargs)
 
@@ -480,10 +400,11 @@ class K3sManagerGUI:
   def __init__(self, root):
     self.root = root
     self.root.title("K3s Manager — Ultra Smooth Enterprise Dashboard")
-    self.root.geometry("1120x880")
+    self.root.geometry("1160x820")
     self.root.minsize(980, 740)
 
     self.bg_window = "#0b0f19"
+    self.bg_sidebar = "#080b13"
     self.bg_card = "#111827"
     self.accent = "#38bdf8"
     self.text_main = "#f8fafc"
@@ -494,7 +415,6 @@ class K3sManagerGUI:
     self.consola_pods = None
     self.consola_red = None
     self.consola_auditoria = None
-    self.consola_terminal_tab = None
 
     self.current_working_dir = os.path.expanduser("~")
     self.comandos_completado = data if isinstance(data, (list, dict)) else {}
@@ -530,60 +450,87 @@ class K3sManagerGUI:
         foreground=[("selected", "#38bdf8")],
     )
 
-    nav_outer = tk.Frame(root, bg=self.bg_window)
-    nav_outer.pack(fill=tk.X, padx=15, pady=(15, 5))
+    self.main_container = tk.Frame(root, bg=self.bg_window)
+    self.main_container.pack(fill=tk.BOTH, expand=True)
 
-    nav_container = tk.Frame(nav_outer, bg=self.bg_window)
-    nav_container.pack(anchor=tk.CENTER)
+    self.sidebar_expanded = True
+    self.sidebar_frame = tk.Frame(
+        self.main_container, bg=self.bg_sidebar, width=230
+    )
+    self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
+    self.sidebar_frame.pack_propagate(False)
 
-    self.tabs_frame = tk.Frame(root, bg=self.bg_window)
-    self.tabs_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+    sidebar_top = tk.Frame(self.sidebar_frame, bg=self.bg_sidebar)
+    sidebar_top.pack(fill=tk.X, padx=10, pady=15)
+
+    self.toggle_btn = RoundedButton(
+        sidebar_top,
+        text="≡",
+        command=self.toggle_sidebar,
+        width=42,
+        height=36,
+        radius=10,
+        bg_color="#1e293b",
+        hover_color="#334155",
+        fg_color=self.accent,
+        hover_fg=self.accent,
+        bg_canvas=self.bg_sidebar,
+        anchor="center",
+    )
+    self.toggle_btn.pack(side=tk.LEFT)
+
+    nav_frame = tk.Frame(self.sidebar_frame, bg=self.bg_sidebar)
+    nav_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     self.frames = {}
     for name in ("pods", "red", "auditoria", "ayuda"):
-      f = tk.Frame(self.tabs_frame, bg=self.bg_window)
+      f = tk.Frame(self.main_container, bg=self.bg_window)
       self.frames[name] = f
 
     self.tab_buttons = {}
     tabs_data = [
-        ("pods", " 📦 Gestión de Pods "),
-        ("red", " 🌐 Red y Puertos "),
-        ("auditoria", " 🛡️ Auditoría y Sistema "),
-        ("ayuda", " 📖 Ayuda & Creators "),
+        ("pods", "Gestión de Pods"),
+        ("red", "Red y Puertos"),
+        ("auditoria", "Auditoría y Sistema"),
+        ("ayuda", "Ayuda & Creators"),
     ]
 
     for key, text in tabs_data:
       btn = RoundedButton(
-          nav_container,
+          nav_frame,
           text=text,
           command=lambda k=key: self.mostrar_pestana(k),
-          width=175,
-          height=38,
-          radius=14,
-          bg_color="#161e2e",
+          width=210,
+          height=40,
+          radius=12,
+          bg_color=self.bg_sidebar,
           hover_color="#1e293b",
           fg_color=self.text_muted,
           hover_fg=self.accent,
-          bg_canvas=self.bg_window,
+          bg_canvas=self.bg_sidebar,
+          anchor="w",
       )
-      btn.pack(side=tk.LEFT, padx=4)
+      btn.pack(fill=tk.X, pady=4)
       self.tab_buttons[key] = btn
 
-    # Botón TERM que abre una terminal externa con bash o zsh según tu configuración
-    btn_term = RoundedButton(
-        nav_container,
-        text=" 💻 TERM ",
+    footer_sidebar = tk.Frame(self.sidebar_frame, bg=self.bg_sidebar)
+    footer_sidebar.pack(fill=tk.X, padx=10, pady=15)
+
+    self.btn_term = RoundedButton(
+        footer_sidebar,
+        text="Terminal Externa",
         command=self.abrir_terminal_externa,
-        width=175,
-        height=38,
-        radius=14,
+        width=210,
+        height=40,
+        radius=12,
         bg_color="#161e2e",
         hover_color="#1e293b",
         fg_color=self.text_muted,
         hover_fg=self.accent,
-        bg_canvas=self.bg_window,
+        bg_canvas=self.bg_sidebar,
+        anchor="w",
     )
-    btn_term.pack(side=tk.LEFT, padx=4)
+    self.btn_term.pack(fill=tk.X)
 
     self.crear_pestana_pods()
     self.crear_pestana_red()
@@ -607,6 +554,39 @@ class K3sManagerGUI:
 
     self.actualizar_lista_pods()
 
+  def toggle_sidebar(self):
+    if self.sidebar_expanded:
+      self.sidebar_frame.config(width=65)
+      for key, btn in self.tab_buttons.items():
+        btn.config(width=45)
+        corto = {"pods": "P", "red": "R", "auditoria": "A", "ayuda": "?"}[key]
+        btn.text = corto
+        btn.anchor = "center"
+        btn.draw()
+      self.btn_term.config(width=45)
+      self.btn_term.text = ">_"
+      self.btn_term.anchor = "center"
+      self.btn_term.draw()
+      self.sidebar_expanded = False
+    else:
+      self.sidebar_frame.config(width=230)
+      nombres = {
+          "pods": "Gestión de Pods",
+          "red": "Red y Puertos",
+          "auditoria": "Auditoría y Sistema",
+          "ayuda": "Ayuda & Creators",
+      }
+      for key, btn in self.tab_buttons.items():
+        btn.config(width=210)
+        btn.text = nombres[key]
+        btn.anchor = "w"
+        btn.draw()
+      self.btn_term.config(width=210)
+      self.btn_term.text = "Terminal Externa"
+      self.btn_term.anchor = "w"
+      self.btn_term.draw()
+      self.sidebar_expanded = True
+
   def obtener_shell_configurada(self):
     shell_path = os.environ.get("SHELL", "")
     if not shell_path:
@@ -622,31 +602,142 @@ class K3sManagerGUI:
       return shutil.which("bash") or "/bin/bash"
     return shutil.which(shell_name) or "/bin/bash"
 
-  def abrir_terminal_externa(self):
-    shell_cmd = self.obtener_shell_configurada()
+  def _lanzar_comando_en_terminal_grafica(self, shell_inner_cmd):
     terminales = [
-        ("x-terminal-emulator", ["x-terminal-emulator", "-e", shell_cmd]),
-        ("gnome-terminal", ["gnome-terminal", "--", shell_cmd]),
-        ("konsole", ["konsole", "-e", shell_cmd]),
-        ("xfce4-terminal", ["xfce4-terminal", "-e", shell_cmd]),
-        ("alacritty", ["alacritty", "-e", shell_cmd]),
-        ("kitty", ["kitty", shell_cmd]),
-        ("tilix", ["tilix", "-e", shell_cmd]),
-        ("xterm", ["xterm", "-e", shell_cmd]),
+        (
+            "x-terminal-emulator",
+            ["x-terminal-emulator", "-e", "bash", "-lc", shell_inner_cmd],
+        ),
+        (
+            "gnome-terminal",
+            ["gnome-terminal", "--", "bash", "-lc", shell_inner_cmd],
+        ),
+        (
+            "konsole",
+            ["konsole", "-e", "bash", "-lc", shell_inner_cmd],
+        ),
+        (
+            "xfce4-terminal",
+            ["xfce4-terminal", "-e", f"bash -lc {shlex.quote(shell_inner_cmd)}"],
+        ),
+        (
+            "alacritty",
+            ["alacritty", "-e", "bash", "-lc", shell_inner_cmd],
+        ),
+        (
+            "kitty",
+            ["kitty", "bash", "-lc", shell_inner_cmd],
+        ),
+        (
+            "tilix",
+            ["tilix", "-e", f"bash -lc {shlex.quote(shell_inner_cmd)}"],
+        ),
+        (
+            "xterm",
+            ["xterm", "-e", "bash", "-lc", shell_inner_cmd],
+        ),
     ]
     for bin_name, cmd_args in terminales:
       if shutil.which(bin_name):
         subprocess.Popen(
             cmd_args,
             cwd=self.current_working_dir,
+            env=construir_entorno_k3s(),
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return
+        return True
     messagebox.showerror(
         "Error", "No se encontró un emulador de terminal gráfico disponible."
     )
+    return False
+
+  def abrir_terminal_externa(self):
+    shell_cmd = self.obtener_shell_configurada()
+    self._lanzar_comando_en_terminal_grafica(f"exec {shlex.quote(shell_cmd)}")
+
+  def abrir_terminal_pod(self):
+    selected = self.tree_pods.selection()
+    manual_id = self.entry_ids.get().strip()
+
+    if len(selected) == 1:
+      val = self.tree_pods.item(selected[0], "values")
+      pod_name, ns = val[2], val[1]
+    elif len(selected) > 1:
+      messagebox.showerror(
+          "Error",
+          "Selecciona únicamente 1 pod en la tabla para abrir su terminal.",
+      )
+      return
+    elif manual_id:
+      if "," in manual_id or "-" in manual_id:
+        messagebox.showerror(
+            "Error",
+            "Indica un único ID o nombre de pod para abrir su terminal.",
+        )
+        return
+      if manual_id.isdigit():
+        pod_name, ns = None, None
+        for row_id in self.tree_pods.get_children():
+          vals = self.tree_pods.item(row_id, "values")
+          if str(vals[0]) == manual_id:
+            ns, pod_name = vals[1], vals[2]
+            break
+        if not pod_name:
+          messagebox.showerror(
+              "Error", f"No se encontró el ID '{manual_id}' en la tabla."
+          )
+          return
+      else:
+        pod_name = manual_id
+        ns = None
+    else:
+      messagebox.showerror(
+          "Error",
+          "Selecciona un pod en la tabla o escribe su ID/nombre en el campo"
+          " de IDs.",
+      )
+      return
+
+    if not ns:
+      cmd_ns = (
+          f"kubectl get pod -A --no-headers -o"
+          f' custom-columns="NS:.metadata.namespace,NAME:.metadata.name"'
+          f" 2>/dev/null | grep -w {shlex.quote(pod_name)} | awk '{{print $1}}'"
+          " | head -n 1"
+      )
+      res = subprocess.run(
+          cmd_ns,
+          shell=True,
+          env=construir_entorno_k3s(),
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+          text=True,
+      )
+      ns = res.stdout.strip()
+      if not ns:
+        messagebox.showerror(
+            "Error", f"No se encontró el pod '{pod_name}' en el clúster."
+        )
+        return
+
+    q_pod = shlex.quote(pod_name)
+    q_ns = shlex.quote(ns)
+    q_label = shlex.quote(f"Conectando a {pod_name} ({ns})...")
+    remote_shell_script = (
+        "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi"
+    )
+    inner_cmd = (
+        f"echo {q_label}; "
+        f"kubectl exec -it {q_pod} -n {q_ns} -- /bin/sh -c {shlex.quote(remote_shell_script)}"
+    )
+    if self._lanzar_comando_en_terminal_grafica(inner_cmd):
+      self.escribir_consola(
+          self.consola_pods,
+          f"[OK] Abierta terminal hacia el contenedor del pod '{pod_name}'"
+          f" (NS: {ns}).",
+      )
 
   def mostrar_pestana(self, name):
     for k, frame in self.frames.items():
@@ -658,13 +749,13 @@ class K3sManagerGUI:
         btn.outline = "#000000"
         btn.outline_width = 2
       else:
-        btn.bg_color = "#161e2e"
+        btn.bg_color = self.bg_sidebar
         btn.fg_color = self.text_muted
         btn.outline = ""
         btn.outline_width = 1
       btn.draw()
 
-    self.frames[name].pack(fill=tk.BOTH, expand=True)
+    self.frames[name].pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
   def escribir_consola(self, consola_target, texto):
     if not consola_target:
@@ -686,6 +777,7 @@ class K3sManagerGUI:
       process = subprocess.Popen(
           cmd,
           shell=True,
+          env=construir_entorno_k3s(),
           stdout=subprocess.PIPE,
           stderr=subprocess.STDOUT,
           text=True,
@@ -725,7 +817,7 @@ class K3sManagerGUI:
     consola = scrolledtext.ScrolledText(
         top_consola_frame,
         wrap=tk.WORD,
-        height=10,
+        height=8,
         bg="#070a12",
         fg="#38bdf8",
         insertbackground="white",
@@ -779,12 +871,13 @@ class K3sManagerGUI:
     top_inner.pack(fill=tk.BOTH, expand=True)
 
     btn_config = [
-        ("🔄 Actualizar", self.actualizar_lista_pods),
-        ("👁️ Ver", self.mostrar_seleccion),
-        ("🧹 Limpiar", self.limpiar_seleccion),
-        ("📜 Logs (1 Pod)", self.ver_logs),
-        ("🔍 Describir", self.describir_pod),
-        ("🗑️ Eliminar", self.eliminar_pods_sel),
+        ("Actualizar", self.actualizar_lista_pods),
+        ("Ver", self.mostrar_seleccion),
+        ("Limpiar", self.limpiar_seleccion),
+        ("Logs", self.ver_logs),
+        ("Describir", self.describir_pod),
+        ("Terminal Pod", self.abrir_terminal_pod),
+        ("Eliminar", self.eliminar_pods_sel),
     ]
 
     for idx, (text, cmd) in enumerate(btn_config):
@@ -798,7 +891,7 @@ class K3sManagerGUI:
           hover_fg="#ffffff",
           radius=12,
           height=36,
-          width=135,
+          width=120,
           bg_canvas=self.bg_card,
       )
       b.grid(row=0, column=idx, padx=4, pady=4, sticky="ew")
@@ -820,15 +913,15 @@ class K3sManagerGUI:
         list_inner,
         columns=columns,
         show="headings",
-        height=8,
+        height=7,
         selectmode="extended",
     )
     self.tree_pods.heading("ID", text="ID Numérico")
     self.tree_pods.heading("Namespace", text="Namespace")
     self.tree_pods.heading("Nombre", text="Nombre del Pod")
-    self.tree_pods.column("ID", width=90, anchor=tk.CENTER)
-    self.tree_pods.column("Namespace", width=220, anchor=tk.W)
-    self.tree_pods.column("Nombre", width=520, anchor=tk.W)
+    self.tree_pods.column("ID", width=80, anchor=tk.CENTER)
+    self.tree_pods.column("Namespace", width=180, anchor=tk.W)
+    self.tree_pods.column("Nombre", width=420, anchor=tk.W)
 
     tree_scroll = ttk.Scrollbar(
         list_inner, orient=tk.VERTICAL, command=self.tree_pods.yview
@@ -863,41 +956,41 @@ class K3sManagerGUI:
 
     RoundedButton(
         action_inner,
-        text="➕ Añadir",
+        text="Añadir",
         command=lambda: self.ejecutar_accion_ids("add"),
         bg_color="#1e293b",
         hover_color="#38bdf8",
         radius=10,
         height=34,
-        width=100,
+        width=95,
         bg_canvas=self.bg_card,
     ).grid(row=0, column=2, padx=4)
     RoundedButton(
         action_inner,
-        text="➖ Quitar",
+        text="Quitar",
         command=lambda: self.ejecutar_accion_ids("remove"),
         bg_color="#1e293b",
         hover_color="#38bdf8",
         radius=10,
         height=34,
-        width=100,
+        width=95,
         bg_canvas=self.bg_card,
     ).grid(row=0, column=3, padx=4)
     RoundedButton(
         action_inner,
-        text="🌐 IP",
+        text="IP",
         command=lambda: self.ejecutar_accion_ids("ip"),
         bg_color="#1e293b",
         hover_color="#38bdf8",
         radius=10,
         height=34,
-        width=100,
+        width=95,
         bg_canvas=self.bg_card,
     ).grid(row=0, column=4, padx=4)
 
     tk.Label(
         action_inner,
-        text="Crear Pods (Cant/Rango):",
+        text="Crear Pods (Cant/Rango/Nombre):",
         bg=self.bg_card,
         fg=self.text_main,
         font=("Segoe UI", 9),
@@ -909,13 +1002,13 @@ class K3sManagerGUI:
 
     RoundedButton(
         action_inner,
-        text="🚀 Crear Pods Prueba",
+        text="Crear Pods",
         command=self.crear_pods_gui,
         bg_color="#0369a1",
         hover_color="#0ea5e9",
         radius=10,
         height=34,
-        width=220,
+        width=210,
         bg_canvas=self.bg_card,
     ).grid(row=1, column=2, columnspan=3, sticky="w", padx=4, pady=6)
 
@@ -955,18 +1048,18 @@ class K3sManagerGUI:
 
     RoundedButton(
         btn_net_frame,
-        text="🔍 Escanear Puertos",
+        text="Escanear Puertos",
         command=self.gui_check_ports,
-        width=170,
+        width=160,
         height=36,
         radius=12,
         bg_canvas=self.bg_card,
     ).pack(side=tk.LEFT, padx=(0, 8))
     RoundedButton(
         btn_net_frame,
-        text="🔒 Aislar / Cerrar",
+        text="Aislar / Cerrar",
         command=self.gui_close_port,
-        width=170,
+        width=160,
         height=36,
         radius=12,
         bg_color="#7f1d1d",
@@ -975,9 +1068,9 @@ class K3sManagerGUI:
     ).pack(side=tk.LEFT, padx=8)
     RoundedButton(
         btn_net_frame,
-        text="🔓 Restaurar / Abrir",
+        text="Restaurar / Abrir",
         command=self.gui_open_port,
-        width=170,
+        width=160,
         height=36,
         radius=12,
         bg_color="#065f46",
@@ -1012,9 +1105,9 @@ class K3sManagerGUI:
     self.entry_test_net.grid(row=0, column=1, sticky=tk.W, padx=5, pady=6)
     RoundedButton(
         grid_test_1,
-        text="⚡ Ejecutar Test",
+        text="Ejecutar Test",
         command=self.gui_test_network,
-        width=150,
+        width=140,
         height=36,
         radius=12,
         bg_canvas=self.bg_card,
@@ -1034,9 +1127,9 @@ class K3sManagerGUI:
         font=("Segoe UI", 9),
     ).grid(row=0, column=0, sticky=tk.W, padx=(5, 6), pady=6)
     self.entry_orig = RoundedEntry(
-        grid_test_2, width=90, height=36, radius=10, bg_canvas=self.bg_card
+        grid_test_2, width=80, height=36, radius=10, bg_canvas=self.bg_card
     )
-    self.entry_orig.grid(row=0, column=1, sticky=tk.W, padx=(0, 20), pady=6)
+    self.entry_orig.grid(row=0, column=1, sticky=tk.W, padx=(0, 15), pady=6)
 
     tk.Label(
         grid_test_2,
@@ -1046,15 +1139,15 @@ class K3sManagerGUI:
         font=("Segoe UI", 9),
     ).grid(row=0, column=2, sticky=tk.W, padx=(0, 6), pady=6)
     self.entry_dest = RoundedEntry(
-        grid_test_2, width=90, height=36, radius=10, bg_canvas=self.bg_card
+        grid_test_2, width=80, height=36, radius=10, bg_canvas=self.bg_card
     )
     self.entry_dest.grid(row=0, column=3, sticky=tk.W, padx=(0, 15), pady=6)
 
     RoundedButton(
         grid_test_2,
-        text="⇄ Probar Tráfico",
+        text="Probar Tráfico",
         command=self.gui_test_connections,
-        width=150,
+        width=140,
         height=36,
         radius=12,
         bg_canvas=self.bg_card,
@@ -1088,9 +1181,9 @@ class K3sManagerGUI:
     ).pack(anchor=tk.W, padx=5, pady=5)
     RoundedButton(
         audit_inner,
-        text="📡 Iniciar Monitorización",
+        text="Iniciar Monitorización",
         command=self.gui_monitor_connect,
-        width=200,
+        width=190,
         height=36,
         radius=12,
         bg_canvas=self.bg_card,
@@ -1112,7 +1205,7 @@ class K3sManagerGUI:
 
     RoundedButton(
         btn_sys_frame,
-        text="ℹ️ Verificar Versión",
+        text="Verificar Versión",
         command=self.gui_version,
         width=170,
         height=36,
@@ -1121,7 +1214,7 @@ class K3sManagerGUI:
     ).pack(side=tk.LEFT, padx=(0, 10))
     RoundedButton(
         btn_sys_frame,
-        text="⬆️ Actualizar Manager",
+        text="Actualizar Manager",
         command=self.gui_update_script,
         width=170,
         height=36,
@@ -1158,7 +1251,7 @@ class K3sManagerGUI:
     help_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     contenido_ayuda = """====================================================================
-GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
+GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 4.22)
 ====================================================================
 
 --- COMANDOS DISPONIBLES PARA PODS ---
@@ -1172,8 +1265,9 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
   • ip <ID | nombre> [ns]      : Obtener IP interna de un pod.
   • describe [-l]              : Ver información resumida o completa.
   • logs                       : Mostrar logs (requiere 1 solo pod).
+  • exec [ID|nombre] [shell]   : Abrir terminal dentro de un pod.
   • delete                     : Eliminar pods seleccionados.
-  • create <N|N-M> [-i img]    : Crea pods individuales o por rango.
+  • create <N|N-M|nombre> [-i img] : Crea pods por cantidad, rango o nombre.
 
 --- PRUEBAS DE RED Y SEGURIDAD ---
   • check-ports [ID | N-M]     : Escanea puertos abiertos.
@@ -1212,7 +1306,7 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
         btns_creators_frame,
         text="GitHub: braispm9",
         command=lambda: webbrowser.open("https://github.com/braispm9"),
-        width=200,
+        width=190,
         height=36,
         radius=12,
         bg_color="#1e293b",
@@ -1224,7 +1318,7 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
         btns_creators_frame,
         text="GitHub: pwnddev",
         command=lambda: webbrowser.open("https://github.com/pwnddev"),
-        width=200,
+        width=190,
         height=36,
         radius=12,
         bg_color="#1e293b",
@@ -1234,8 +1328,14 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
 
   def actualizar_lista_pods(self):
     def tarea():
-      for row in self.tree_pods.get_children():
-        self.tree_pods.delete(row)
+      def _limpiar_tabla():
+        for row in self.tree_pods.get_children():
+          self.tree_pods.delete(row)
+
+      if threading.current_thread() is threading.main_thread():
+        _limpiar_tabla()
+      else:
+        self.root.after(0, _limpiar_tabla)
 
       cmd = (
           "kubectl get pods --all-namespaces --no-headers -o"
@@ -1246,6 +1346,7 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
         resultado = subprocess.run(
             cmd,
             shell=True,
+            env=construir_entorno_k3s(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -1264,15 +1365,23 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
         return
 
       lineas = salida.split("\n")
-      idx = 1
-      for linea in lineas:
-        partes = linea.split()
-        if len(partes) >= 2:
-          ns = partes[0]
-          if ns != "kube-system":
-            name = partes[1]
-            self.tree_pods.insert("", tk.END, values=(idx, ns, name))
-            idx += 1
+
+      def _poblar():
+        idx = 1
+        for linea in lineas:
+          partes = linea.split()
+          if len(partes) >= 2:
+            ns = partes[0]
+            if ns != "kube-system":
+              name = partes[1]
+              self.tree_pods.insert("", tk.END, values=(idx, ns, name))
+              idx += 1
+
+      if threading.current_thread() is threading.main_thread():
+        _poblar()
+      else:
+        self.root.after(0, _poblar)
+
       self.escribir_consola(
           self.consola_pods,
           "[OK] Tabla de pods sincronizada y actualizada correctamente.",
@@ -1389,10 +1498,11 @@ GUÍA DE COMANDOS Y ASISTENCIA - K3S MANAGER (Release 3.2)
     threading.Thread(target=tarea, daemon=True).start()
 
   def crear_pods_gui(self):
-    param = self.entry_create.get().strip()
+    param = self.entry_create.get().strip().lower()
     if not param:
       messagebox.showerror(
-          "Error", "Indica una cantidad o rango (ej: 3 o 1-5) para crear."
+          "Error",
+          "Indica una cantidad, rango o nombre (ej: 3, 1-5 o mi-pod) para crear.",
       )
       return
 
@@ -1524,4 +1634,3 @@ if __name__ == "__main__":
   root = tk.Tk()
   app = K3sManagerGUI(root)
   root.mainloop()
-
