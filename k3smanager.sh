@@ -1,9 +1,19 @@
 #!/bin/bash
-VERSION="Release 4.21"
+VERSION="Release 4.22"
 if [ "$REINICIANDO_K3SMANAGER" = true ]; then
     unset REINICIANDO_K3SMANAGER
 fi
 export PROMPT="k3s> "
+
+# --- CONFIGURACIÓN KUBECONFIG PARA K3S ---
+if [ -z "$KUBECONFIG" ]; then
+    if [ -f "$HOME/.kube/config" ]; then
+        export KUBECONFIG="$HOME/.kube/config"
+    elif [ -r "/etc/rancher/k3s/k3s.yaml" ]; then
+        export KUBECONFIG="/etc/rancher/k3s/k3s.yaml"
+    fi
+fi
+
 # --- INICIALIZACIÓN DE VARIABLES GLOBALES ---
 SELECCIONADOS_PODS=()
 SELECCIONADOS_NAMESPACES=()
@@ -26,10 +36,11 @@ mostrar_ayuda() {
         echo ""
         echo "Comandos de información y acción:"
         echo "  ip <OPTIONS>               - Obtener la IP interna de un pod por su ID o nombre"
-        echo "  describe [OPTIONS]              - Ver información resumida o completa (-l) de la selección"
+        echo "  describe [OPTIONS]         - Ver información resumida o completa (-l) de la selección"
         echo "  logs                       - Mostrar logs (requiere seleccionar solo 1 pod)"
+        echo "  exec [ID|nombre] [shell]   - Abrir terminal interactiva dentro de un pod"
         echo "  delete                     - Eliminar el/los pod(s) seleccionados"
-        echo "  create <N|N-M> [-i imagen] - Crea pod individual o rango con imagen opcional"
+        echo "  create <N|N-M|nombre> [-i imagen] - Crea pod(s) por cantidad, rango o nombre personalizado"
         echo ""
         echo "Pruebas de Red, Control de Puertos y Auditoría:"
         echo "  check-ports [ID | N-M]     - Escanea los puertos abiertos de pods seleccionados o por ID/rango"
@@ -42,7 +53,7 @@ mostrar_ayuda() {
         echo "  version                    - Verifica si es la última versión y muestra la versión actual"
         echo "  update                     - Instala la última versión del software y se reactiva"
         echo "  help [comando]             - Ayuda general o de una función específica"
-        echo -e "  exit                    - Salir de la consola\n"
+        echo -e "  exit                       - Salir de la consola\n"
         return
     fi
 
@@ -90,8 +101,19 @@ mostrar_ayuda() {
             echo "Uso: logs"
             echo "Muestra los logs de configuración"
             ;;
+        exec|shell)
+            echo "Uso: exec [ID|nombre] [shell]"
+            echo "Abre una shell interactiva (bash/sh) en el pod indicado o en el único pod seleccionado."
+            ;;
         delete)
-            echo "Uso: "
+            echo "Uso: delete"
+            echo "Elimina los pods seleccionados"
+            ;;
+        create)
+            echo "Uso: create <N|N-M|nombre> [-i imagen]"
+            echo "  N      : Crea N pods (pod-app-1 .. pod-app-N)"
+            echo "  N-M    : Crea pods del rango (pod-app-N .. pod-app-M)"
+            echo "  nombre : Crea un pod con el nombre indicado (en minúsculas y guiones)"
             ;;
         *)
             echo -e "\nNo hay información detallada sobre '$cmd'. Escribe 'help' para ver la lista.\n"
@@ -187,11 +209,67 @@ actualizar_pods() {
     done < <(kubectl get pods --all-namespaces --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | sort -k2 -V)
 }
 
+abrir_terminal_pod() {
+    local target="$1"
+    local shell_custom="$2"
+    local pod_nombre=""
+    local pod_ns=""
+
+    actualizar_pods
+
+    if [ -n "$target" ]; then
+        if [[ "$target" =~ ^[0-9]+$ ]]; then
+            if [ "$target" -ge 1 ] && [ "$target" -le "${#PODS_LIST[@]}" ]; then
+                local idx=$((target - 1))
+                pod_nombre="${PODS_LIST[$idx]}"
+                pod_ns="${PODS_NS_LIST[$idx]}"
+            else
+                echo "Error: El ID '$target' no existe en la lista general."
+                return 1
+            fi
+        else
+            pod_nombre="$target"
+            pod_ns=$(kubectl get pod -A --no-headers -o custom-columns="NS:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | grep -w "$pod_nombre" | awk '{print $1}' | head -n 1)
+        fi
+    else
+        if [ ${#SELECCIONADOS_PODS[@]} -eq 1 ]; then
+            pod_nombre="${SELECCIONADOS_PODS[0]}"
+            pod_ns="${SELECCIONADOS_NAMESPACES[0]}"
+        elif [ ${#SELECCIONADOS_PODS[@]} -gt 1 ]; then
+            echo "Error: Hay más de 1 pod seleccionado. Indica un ID o nombre: exec <ID|nombre>"
+            return 1
+        else
+            echo "Uso: exec <ID|nombre> [shell] (o selecciona 1 pod previamente)."
+            return 1
+        fi
+    fi
+
+    if [ -z "$pod_ns" ]; then
+        echo "Error: No se encontró el pod '$pod_nombre'."
+        return 1
+    fi
+
+    if [ -n "$shell_custom" ]; then
+        echo "Conectando a '$pod_nombre' (NS: $pod_ns) con '$shell_custom'..."
+        kubectl exec -it "$pod_nombre" -n "$pod_ns" -- "$shell_custom"
+        return $?
+    fi
+
+    echo "Conectando a '$pod_nombre' (NS: $pod_ns)..."
+    kubectl exec -it "$pod_nombre" -n "$pod_ns" -- /bin/sh -c '
+        if command -v bash >/dev/null 2>&1; then
+            exec bash
+        else
+            exec sh
+        fi
+    '
+}
+
 comandos() {
     local COMAND="$1"
     local SUBAC="$2"
     local ARGUMENT="$3"
-        case "$COMAND" in
+    case "$COMAND" in
         list)
             listar_pods_pantalla "$SUBAC" "${INPUT[2]}"
             ;;
@@ -284,6 +362,9 @@ comandos() {
                 kubectl logs "${SELECCIONADOS_PODS[0]}" -n "${SELECCIONADOS_NAMESPACES[0]}" --tail=50
             fi
             ;;
+        exec|shell)
+            abrir_terminal_pod "$SUBAC" "${INPUT[2]}"
+            ;;
         delete)
             if [ ${#SELECCIONADOS_PODS[@]} -eq 0 ]; then
                 echo "Error: No hay pods seleccionados para eliminar."
@@ -333,8 +414,6 @@ comandos() {
     esac
 }
 
-
-
 listar_pods_pantalla() {
     local arg1="$1"
     local arg2="$2"
@@ -345,7 +424,7 @@ listar_pods_pantalla() {
     actualizar_pods
 
     if [ ${#PODS_LIST[@]} -eq 0 ]; then
-        echo "No se encontraron pods de aplicación disponibles."
+        echo "No se encontraron pods de aplicación disponibles o no hay conexión con K3s."
         return
     fi
 
@@ -402,24 +481,41 @@ crear_pods() {
     local val_img="$3"
     local imagen="nginx:alpine"
 
+    if ! kubectl cluster-info >/dev/null 2>&1; then
+        echo "[X] Sin conexión con K3s. Verifica que el servicio k3s esté activo y KUBECONFIG sea válido."
+        return 1
+    fi
+
     if [ "$opt_img" == "-i" ] || [ "$opt_img" == "--image" ]; then
         [ -n "$val_img" ] && imagen="$val_img"
     fi
 
     if [[ "$target" =~ ^[0-9]+$ ]]; then
         for ((c=1; c<=target; c++)); do
-            kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+            if ! kubectl run "pod-app-$c" --image="$imagen"; then
+                echo "[X] Error al crear pod-app-$c."
+            fi
         done
         echo "Creados $target pods con la imagen '$imagen'."
     elif [[ "$target" =~ ^([0-9]+)-([0-9]+)$ ]]; then
         local i_c="${BASH_REMATCH[1]}"
         local f_c="${BASH_REMATCH[2]}"
         for ((c=i_c; c<=f_c; c++)); do
-            kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
+            if ! kubectl run "pod-app-$c" --image="$imagen"; then
+                echo "[X] Error al crear pod-app-$c."
+            fi
         done
         echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
+    elif [[ "$target" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
+        if kubectl run "$target" --image="$imagen"; then
+            echo "Creado pod '$target' con la imagen '$imagen'."
+        else
+            echo "[X] Error al crear el pod '$target'."
+            return 1
+        fi
     else
-        echo "Uso: create <N|N-M> [-i imagen]"
+        echo "Uso: create <N|N-M|nombre> [-i imagen]"
+        echo "Nota: el nombre del pod debe usar minúsculas, números o guiones (ej: mi-pod-1)."
         return 1
     fi
 
@@ -936,6 +1032,10 @@ if [ $# -gt 0 ]; then
             obtener_ip_pod "$SUBACCION_CLI" "${3}"
             exit 0
             ;;
+        exec|shell)
+            abrir_terminal_pod "$SUBACCION_CLI" "${3}"
+            exit $?
+            ;;
         add|select)
             if [ "$SUBACCION_CLI" == "pod" ] || [ "$SUBACCION_CLI" == "pods" ]; then
                 añadir_a_seleccion "${@:3}"
@@ -945,7 +1045,7 @@ if [ $# -gt 0 ]; then
             exit 0
             ;;
         remove|deselect)
-            if [ "$SUBACCION_CLI" == "pod" ] || [ "$SUBACCION_CLI" == "pods" ]; then
+            if [ "$SUBAC" == "pod" ] || [ "$SUBAC" == "pods" ]; then
                 quitar_de_seleccion "${@:3}"
             else
                 quitar_de_seleccion "${ARGUMENTOS_CLI[@]}"
@@ -953,23 +1053,7 @@ if [ $# -gt 0 ]; then
             exit 0
             ;;
         create)
-            imagen="nginx:alpine"
-            if [ "${3}" == "-i" ] || [ "${3}" == "--image" ]; then
-                [ -n "${4}" ] && imagen="${4}"
-            fi
-            if [[ "$SUBACCION_CLI" =~ ^[0-9]+$ ]]; then
-                for ((c=1; c<=SUBACCION_CLI; c++)); do
-                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
-                done
-                echo "Creados $SUBACCION_CLI pods con la imagen '$imagen'."
-            elif [[ "$SUBACCION_CLI" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-                i_c="${BASH_REMATCH[1]}"
-                f_c="${BASH_REMATCH[2]}"
-                for ((c=i_c; c<=f_c; c++)); do
-                    kubectl run "pod-app-$c" --image="$imagen" >/dev/null 2>&1
-                done
-                echo "Creados pods del pod-app-$i_c al pod-app-$f_c con la imagen '$imagen'."
-            fi
+            crear_pods "$SUBACCION_CLI" "${3}" "${4}"
             exit 0
             ;;
         test-network)
